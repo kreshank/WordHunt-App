@@ -8,6 +8,8 @@
 
 #include <iostream>
 
+#define IMGUI_DEFINE_MATH_OPERATORS
+
 #include "imgui.h"
 #include "imgui_impl_win32.h"
 #include "imgui_impl_dx12.h"
@@ -59,6 +61,11 @@ static D3D12_CPU_DESCRIPTOR_HANDLE  g_mainRenderTargetDescriptor[NUM_BACK_BUFFER
 #define IM_MAX(A, B)            (((A) >= (B)) ? (A) : (B))
 #define IM_CLAMP(V, MN, MX)     ((V) < (MN) ? (MN) : (V) > (MX) ? (MX) : (V))
 
+// Math Macros
+#define IM_PI                           3.14159265358979323846f
+#define IM_FLOOR(_VAL)                  ((float)(int)(_VAL))  
+#define IM_ROUND(_VAL)                  ((float)(int)((_VAL) + 0.5f)) 
+
 // Forward declarations of helper functions
 bool CreateDeviceD3D(HWND hWnd);
 void CleanupDeviceD3D();
@@ -68,6 +75,10 @@ void WaitForLastSubmittedFrame();
 FrameContext* WaitForNextFrameResources();
 LRESULT WINAPI WndProc(HWND hWnd, UINT msg, WPARAM wParam, LPARAM lParam);
 void GenerateRandomGame(char* s, const size_t len, int seed = 0);
+
+// Forward declarations of drawing functions
+void DisplayWord(const char* Text);
+
 
 // Main code
 int main(int, char**)
@@ -152,24 +163,27 @@ int main(int, char**)
     static const ImGuiViewport* viewport = ImGui::GetMainViewport();
 
     // Constants
-    const static int    maxRows = 15;
-    const static int    maxColumns = 15;
-    const static int    numTiles = maxRows * maxColumns;
+    const static int    max_row = 15;
+    const static int    max_columns = 15;
+    const static int    num_tiles = max_row * max_columns;
     const static ImU32  default_board_color = IM_COL32(236, 205, 155, 255);
 
     // Board State
-    static int          numRows = 4;
-    static int          numColumns = 4;
-    static char         board[maxRows][maxColumns];
-    static bool         isActive[maxRows][maxColumns];
+    static int          first_used_row = 0;
+    static int          first_used_column = 0;
+    static int          num_rows = 4;
+    static int          num_columns = 4;
+    static char         board[max_row][max_columns];
+    static bool         active_tiles[max_row][max_columns];
 
     // Selection Variables
-    static ImVec2       TilePosition[maxRows][maxColumns]; // Holds pointer to the window position of the
-    static ImVec2       TilePath[numTiles];
-    static bool         activated[maxRows][maxColumns];
+    static ImVec2       tile_centers[max_row][max_columns]; // Entries are center coordinates (center.x, center.y) of a tile
+    static ImVec2       tile_path_pos[num_tiles]; // Center positions of currently selected tiles
+    static ImVec2       tile_path_id[num_tiles]; // Holds the (Row, Column) of the tiles selected
+    static bool         activated[max_row][max_columns]; // Is activated in path
 
     // Solution
-    static char         word[numTiles];
+    static char         word[num_tiles];
     static int          word_length = 0;
     static std::string  word_str;
     static char         previous_word[256];
@@ -177,6 +191,7 @@ int main(int, char**)
     static std::string  previous_word_str;
     static bool         currently_is_word = false;
     static std::set<std::string> found_words;
+    static std::set<Solution*, SolutionPointerComparator> discovered;
 
     // Line Variables
     // White lines, green background on real word
@@ -189,39 +204,39 @@ int main(int, char**)
     static ImU32        line_color = pale_white;
 
 
-    static auto start_timer = std::chrono::high_resolution_clock::now();
-    static auto end_timer = std::chrono::high_resolution_clock::now() + std::chrono::seconds(80);
-    static auto timer_delta = std::chrono::duration_cast<std::chrono::seconds>(end_timer - start_timer);
+    static auto         start_timer = std::chrono::high_resolution_clock::now();
+    static auto         end_timer = std::chrono::high_resolution_clock::now() + std::chrono::seconds(80);
+    static auto         timer_delta = std::chrono::duration_cast<std::chrono::seconds>(end_timer - start_timer);
+    static const float  game_length_seconds = 10.0f;
 
-    std::mt19937 rng(__rdtsc()); // random function
-    static bool game_begin = false;
-    static int seed;
-    static Seed* game_seed = new Seed(std::uniform_int_distribution<int>(0)(rng));
+    std::mt19937 rng((unsigned int)__rdtsc()); // random function
+    static int game_phase = WordHuntGamePhase_Generate;
+    static Seed* game_seed;
+    static char seed_string[256] = "";
 
 
     // Main loop
     bool done = false;
     while (!done)
     {
+        // Poll and handle messages (inputs, window resize, etc.)
+        // See the WndProc() function below for our to dispatch events to the Win32 backend.
+        MSG msg;
+        while (::PeekMessage(&msg, nullptr, 0U, 0U, PM_REMOVE))
         {
-            // Poll and handle messages (inputs, window resize, etc.)
-            // See the WndProc() function below for our to dispatch events to the Win32 backend.
-            MSG msg;
-            while (::PeekMessage(&msg, nullptr, 0U, 0U, PM_REMOVE))
-            {
-                ::TranslateMessage(&msg);
-                ::DispatchMessage(&msg);
-                if (msg.message == WM_QUIT)
-                    done = true;
-            }
-            if (done)
-                break;
-
-            // Start the Dear ImGui frame
-            ImGui_ImplDX12_NewFrame();
-            ImGui_ImplWin32_NewFrame();
-            ImGui::NewFrame();
+            ::TranslateMessage(&msg);
+            ::DispatchMessage(&msg);
+            if (msg.message == WM_QUIT)
+                done = true;
         }
+        if (done)
+            break;
+
+        // Start the Dear ImGui frame
+        ImGui_ImplDX12_NewFrame();
+        ImGui_ImplWin32_NewFrame();
+        ImGui::NewFrame();
+
         // our window
         ImGuiWindowFlags main_game_window_flags = ImGuiWindowFlags_NoResize;
         main_game_window_flags |= ImGuiWindowFlags_NoMove;
@@ -240,7 +255,10 @@ int main(int, char**)
             {
                 ImGui::SetWindowFocus();
                 show_random_game = true;
-                game_begin = false;
+                game_phase = WordHuntGamePhase_Generate;
+                game_seed = new Seed(std::uniform_int_distribution<int>(0, UINT_MAX)(rng));
+                discovered.clear();
+                found_words.clear();
             }
             if (ImGui::Button("Create a game!"))
             {
@@ -261,45 +279,26 @@ int main(int, char**)
         {
             // Forward declaration of variable
 
-            ImGui::Begin("Word Hunt", &show_random_game, ImGuiWindowFlags_NoDocking | ImGuiWindowFlags_NoCollapse );
+            ImGui::Begin("Word Hunt", &show_random_game, ImGuiWindowFlags_NoDocking | ImGuiWindowFlags_NoCollapse | ImGuiWindowFlags_NoScrollbar);
 
-            // Game state
-            const float         TilePadding = 12.0f;
-            static float        TileWidth = IM_CLAMP(ImGui::GetWindowWidth() / (numRows + 1), 75, 100);
-            static float        TileHeight = IM_CLAMP(ImGui::GetWindowHeight() / (numColumns + 1), 75, TileWidth);
-            
-            static ImVec2       previous_tile = ImVec2(-1, -1);
-            static char         letters[256] = "";
-            float board_width = TileWidth * numColumns + style.ItemSpacing.x * (numColumns - 1);
-            float board_height = TileHeight * numRows + style.ItemSpacing.y * (numRows - 1);
-
-            TileWidth = TileHeight;
-
-            // Set correct color theme
-            if (currently_is_word = current_dictionary->IsWord(word, word_length))
-            {
-                line_color = pale_white;
-            }
-            else
-            {
-                line_color = pale_red;
-            }
+            static char letters[256] = "";
 
             // TODO - Create a window or selection system for the board shape / size
             // Replace with a button that starts the game
 
             // [SECTION] - GAME SETTING SELECTORS
 
-            if (!game_begin)
+            if (game_phase == WordHuntGamePhase_Generate)
             {
                 static char seed_buffer[256] = "Enter a seed or ignore and continue.";
-                ImGui::InputText("##seed input", seed_buffer, 256, ImGuiInputTextFlags_CharsDecimal | ImGuiInputTextFlags_AutoSelectAll);
+                ImGui::InputText("##seed input", seed_buffer, 256, ImGuiInputTextFlags_AutoSelectAll | ImGuiInputTextFlags_CharsNoBlank);
                 if (ImGui::IsItemClicked())
                 {
-                    strncpy(seed_buffer, "", 256);
+                    strncpy_s(seed_buffer, "", 256);
                 }
 
                 static std::string seed_button_text = "Load seed";
+                ImGui::SameLine();
 
                 if (ImGui::Button(seed_button_text.data()))
                 {
@@ -310,45 +309,144 @@ int main(int, char**)
                     else {
                         game_seed = new Seed(seed_buffer);
                         seed_button_text = "Seed loaded!";
+                        game_phase = WordHuntGamePhase_Selection;
                     }
                 }
 
-                if (!game_begin && ImGui::Button("Begin Random Game"))
+                if (ImGui::Button("Begin Random Game"))
                 {
-                    seed = std::uniform_int_distribution<int>(0)(rng);
-                    GenerateRandomGame(letters, numTiles, seed);
-                    found_words.clear();
-                    game_begin = true;
+                    game_phase = WordHuntGamePhase_Selection;
+                }
+                if (game_phase != WordHuntGamePhase_Generate)
+                {
+                    strcpy_s(seed_buffer, "Enter a seed or ignore and continue.");
                 }
             }
+            //R4C4>1111111111111111[3556389293]
 
-            if (game_begin)
+
+            if (game_phase == WordHuntGamePhase_Generate)
             {
+                found_words.clear();
+                discovered.clear();
+                char* temp = game_seed->to_string();
+                int index = 0;
+                while (temp[index] != 0)
+                {
+                    std::cout << temp[index]; // temp magically changes because of compiler optimization deadass deleted the second half of my string
+                    seed_string[index] = temp[index];
+                    index++;
+                }
+
+                GenerateRandomGame(letters, num_tiles, game_seed->seed_value);
+                game_phase = WordHuntGamePhase_Play;
+                start_timer = std::chrono::high_resolution_clock::now();
+                end_timer = start_timer + std::chrono::seconds(int(game_length_seconds));
+            }
+
+            if (game_phase == WordHuntGamePhase_Play || game_phase == WordHuntGamePhase_Result)
+            {
+                // DRAW CLOCK
+                if (game_phase == WordHuntGamePhase_Play)
+                {
+                    static const float clock_width = 150.0f;
+                    static const float clock_height = 150.0f;
+                    static const float clock_outer_radius = clock_width / 2.0f;
+                    static const float clock_rim_width = 5.0f;
+                    static const float clock_inner_radius = clock_outer_radius - clock_rim_width;
+                    static const float clock_tick_length = 7.5f;
+                    static const int   clock_tick_quantity = 12;
+                    static const float clock_angle_step = IM_PI / 6.0f;
+
+                    static const ImU32 clock_rim_color = IM_COL32(0, 0, 0, 255);
+                    static const ImU32 clock_center_color = IM_COL32(255, 255, 255, 255);
+                    static const ImU32 clock_tick_color = IM_COL32(0, 0, 0, 255);
+                    static const ImU32 clock_passed_color = IM_COL32(180, 0, 0, 120);
+
+                    auto delta = std::chrono::duration_cast<std::chrono::milliseconds>(std::chrono::high_resolution_clock::now() - start_timer);
+                    float passed_percentage = float(delta.count() / (game_length_seconds * 1000.0f));
+
+                    ImGui::SetCursorPosX((ImGui::GetWindowWidth() - clock_width) * 0.5f);
+                    ImVec2 clock_absolute_center = ImGui::GetCursorScreenPos() + ImVec2(clock_width * 0.5f, clock_height * 0.5f);
+                    ImGui::BeginChild("Clock", ImVec2(clock_width, clock_height), true, ImGuiWindowFlags_NoDecoration | ImGuiWindowFlags_NoInputs);
+
+                    ImGui::GetForegroundDrawList()->AddCircleFilled(clock_absolute_center, clock_outer_radius, clock_rim_color);
+                    ImGui::GetForegroundDrawList()->AddCircleFilled(clock_absolute_center, clock_inner_radius, clock_center_color);
+                    if (passed_percentage < 1.0f)
+                    {
+                        ImGui::GetForegroundDrawList()->_Path.push_back(clock_absolute_center);
+                        ImGui::GetForegroundDrawList()->PathArcTo(clock_absolute_center, clock_inner_radius, -IM_PI * 0.5f, IM_PI * (passed_percentage * 2.0f - 0.5f));
+                        ImGui::GetForegroundDrawList()->PathFillConvex(clock_passed_color);
+                    }
+                    else
+                    {
+                        game_phase = WordHuntGamePhase_Result;
+                        ImGui::GetForegroundDrawList()->AddCircleFilled(clock_absolute_center, clock_inner_radius, clock_passed_color);
+                    }
+
+                    for (int i = 0; i < clock_tick_quantity; i++)
+                    {
+                        ImVec2 angle = ImVec2(cosf(i * clock_angle_step), sinf(i * clock_angle_step));
+                        ImVec2 p1 = ImVec2(clock_inner_radius, clock_inner_radius) * angle + clock_absolute_center;
+                        ImVec2 p2 = p1 - ImVec2(clock_tick_length, clock_tick_length) * angle;
+                        ImGui::GetForegroundDrawList()->AddLine(p1, p2, clock_tick_color);
+                    }
+
+                    ImGui::EndChild();
+                }
+
+                // DRAW GAME BOARD
+                const float         TilePadding = 12.0f;
+                static float        TileWidth = IM_CLAMP(ImGui::GetWindowWidth() / (num_rows + 1), 75, 100);
+                static float        TileHeight = IM_CLAMP(ImGui::GetWindowHeight() / (num_columns + 1), 75, TileWidth);
+                TileWidth = TileHeight;
+
+                static ImVec2       previous_tile = ImVec2(-1, -1);
+                ImVec2 board_size = ImVec2(TileWidth, TileHeight) * ImVec2(float(num_columns), float(num_rows)) + style.ItemSpacing * ImVec2(float(num_columns - 1), float(num_rows - 1));
+
+                // Set correct color theme
+                currently_is_word = current_dictionary->IsWord(word, word_length);
+                if (currently_is_word && word_length > 2)
+                {
+                    line_color = pale_white;
+                }
+                else
+                {
+                    line_color = pale_red;
+                }
+
+                // Draw selection path
+                for (int i = 1; i < word_length; i++)
+                {
+                    ImGui::GetForegroundDrawList()->AddLine(tile_path_pos[i - 1], tile_path_pos[i], line_color, line_thickness);
+                    ImGui::GetForegroundDrawList()->AddCircleFilled(tile_path_pos[i - 1], line_thickness / 2, line_color);
+                }
+
                 // Create a style for the Tiles
                 // Rounded square tiles, black serif font
                 ImGui::PushStyleVar(ImGuiStyleVar_ChildRounding, 15.0f);
                 ImGui::PushStyleColor(ImGuiCol_Text, IM_COL32(0, 0, 0, 255));
                 ImGui::PushFont(io.Fonts->Fonts[1]);
-
+                
                 // Center the board
-                ImGui::SetCursorPosX((ImGui::GetWindowWidth() - board_width) * 0.5f);
-                ImGui::BeginChild("Board", ImVec2(board_width, board_height), false, ImGuiWindowFlags_NoBackground | ImGuiWindowFlags_NoMove);
+                ImGui::SetCursorPosX((ImGui::GetWindowWidth() - board_size.x) * 0.5f);
+                ImGui::BeginChild("Board", board_size, false, ImGuiWindowFlags_NoBackground | ImGuiWindowFlags_NoMove);
 
-                for (int row = 0; row < numRows; row++)
+                for (int row = 0; row < num_rows; row++)
                 {
-                    for (int column = 0; column < numColumns; column++)
+                    for (int column = 0; column < num_columns; column++)
                     {
                         if (column) ImGui::SameLine();
 
                         // Creating a unique tile ID for each
                         char TileID[7] = "Tile  ";
-                        TileID[4] = row + 1;
-                        TileID[5] = column + 1;
+                        TileID[4] = char(row + 1);
+                        TileID[5] = char(column + 1);
 
                         ImU32 tile_color = default_board_color;
-                        if (word_length > 2 && activated[row][column])
+                        if (activated[row][column])
                         {
-                            if (currently_is_word)
+                            if (word_length > 2 && currently_is_word)
                             {
                                 word_str = std::string(word, word + word_length);
                                 if (found_words.find(word_str) == found_words.end())
@@ -369,35 +467,39 @@ int main(int, char**)
                         ImGui::PushStyleColor(ImGuiCol_ChildBg, tile_color);
                         // Tile Creation
                         ImGui::BeginChild(TileID, ImVec2(TileWidth, TileHeight), true, ImGuiWindowFlags_NoScrollbar | ImGuiWindowFlags_NoMove);
-                        TilePosition[row][column] = ImVec2(ImGui::GetWindowPos().x + TileWidth / 2, ImGui::GetWindowPos().y + TileHeight / 2);
+                        tile_centers[row][column] = ImGui::GetWindowPos() + ImVec2(TileWidth / 2, TileHeight / 2);
 
                         // Center and print tile
-                        char* visible_character = &letters[(row * numRows + column) * 2];
+                        char* visible_character = &letters[(row * num_rows + column) * 2];
                         ImVec2 text_dimensions = ImGui::CalcTextSize(visible_character);
-                        ImGui::SetCursorPos(ImVec2((TileWidth - text_dimensions.x) * 0.5f, (TileHeight - text_dimensions.y) * 0.5f));
+                        ImGui::SetCursorPos((ImVec2(TileWidth, TileHeight) - text_dimensions) * 0.5f);
                         ImGui::Text(visible_character);
 
                         // Check if hovering over a tile
-                        ImGui::SetCursorPos(ImVec2());
-                        ImVec2 hitboxMin(ImGui::GetCursorScreenPos().x + TilePadding, ImGui::GetCursorScreenPos().y + TilePadding), hitboxMax(ImGui::GetCursorScreenPos().x + TileWidth - TilePadding, ImGui::GetCursorScreenPos().y + TileHeight - TilePadding);
-                        if (game_begin && ImGui::IsMouseHoveringRect(hitboxMin, hitboxMax) && ImGui::IsMouseDragging(ImGuiMouseButton_Left))
+                        if (game_phase == WordHuntGamePhase_Play)
                         {
-                            if (!activated[row][column] && ((previous_tile.x == -1 && previous_tile.y == -1) || (abs(previous_tile.x - row) <= 1 && abs(previous_tile.y - column) <= 1)))
+                            ImGui::SetCursorPos(ImVec2());
+                            ImVec2 hitbox_min = ImGui::GetCursorScreenPos() + ImVec2(TilePadding, TilePadding);
+                            ImVec2 hitbox_max = hitbox_min + ImVec2(TileWidth, TileHeight);
+                            if (ImGui::IsMouseHoveringRect(hitbox_min, hitbox_max) && ImGui::IsMouseDown(ImGuiMouseButton_Left))
                             {
-                                activated[row][column] = 1;
-                                char letter = visible_character[0];
-                                word[word_length] = letter;
-                                TilePath[word_length++] = TilePosition[row][column];
-                                word[word_length] = 0;
-                                previous_tile = ImVec2(row, column);
-                            }
-                            if (word_length)
-                            {
-                                ImGui::GetForegroundDrawList()->AddLine(TilePath[word_length - 1], io.MousePos, line_color, line_thickness);
-                                ImGui::GetForegroundDrawList()->AddCircleFilled(io.MousePos, line_thickness / 2, line_color);
+                                if (!activated[row][column] && ((previous_tile.x == -1 && previous_tile.y == -1) || (abs(previous_tile.x - row) <= 1 && abs(previous_tile.y - column) <= 1)))
+                                {
+                                    activated[row][column] = 1;
+                                    char letter = visible_character[0];
+                                    word[word_length] = letter;
+                                    tile_path_id[word_length] = ImVec2(float(row), float(column));
+                                    tile_path_pos[word_length++] = tile_centers[row][column];
+                                    word[word_length] = 0;
+                                    previous_tile = ImVec2(float(row), float(column));
+                                }
+                                if (word_length)
+                                {
+                                    ImGui::GetForegroundDrawList()->AddLine(tile_path_pos[word_length - 1], io.MousePos, line_color, line_thickness);
+                                    ImGui::GetForegroundDrawList()->AddCircleFilled(io.MousePos, line_thickness / 2, line_color);
+                                }
                             }
                         }
-
                         ImGui::EndChild();
 
                         ImGui::PopStyleColor();
@@ -410,53 +512,68 @@ int main(int, char**)
                 ImGui::PopStyleColor();
                 ImGui::PopStyleVar();
 
-                if (game_begin && ImGui::IsMouseReleased(ImGuiMouseButton_Left))
+                if (game_phase == WordHuntGamePhase_Play)
                 {
-                    previous_word_length = word_length;
-                    for (int i = 0; i <= word_length; i++)
+                    // WORD DETECTION LOGIC
+                    if (ImGui::IsMouseReleased(ImGuiMouseButton_Left))
                     {
-                        previous_word[i] = word[i];
-                    }
-                    word_length = 0;
+                        previous_word_length = word_length;
+                        for (int i = 0; i <= word_length; i++)
+                        {
+                            previous_word[i] = word[i];
+                        }
+                        word_length = 0;
 
-                    previous_word_str = std::string(previous_word, previous_word + previous_word_length);
-                    if (previous_word_length > 2 && current_dictionary->IsWord(previous_word_str))
-                    {
-                        found_words.insert(previous_word_str);
+                        previous_word_str = std::string(previous_word, previous_word + previous_word_length);
+                        if (previous_word_length > 2 && current_dictionary->IsWord(previous_word_str) && found_words.find(previous_word_str) == found_words.end())
+                        {
+                            found_words.insert(previous_word_str);
+                            std::cout << previous_word_str << "\t\t of length [" << previous_word_length;
+                            Tile* head = new Tile((int)tile_path_id[0].x, (int)tile_path_id[0].y, letters[(int)(tile_path_id[0].x * num_rows + tile_path_id[0].y) * 2]);
+                            Tile* temp = head;
+                            for (int i = 1; i < previous_word_length; i++)
+                            {
+                                temp->next = new Tile((int)tile_path_id[i].x, (int)tile_path_id[i].y, letters[(int)(tile_path_id[i].x * num_rows + tile_path_id[i].y) * 2]);
+                                temp = temp->next;
+                            }
+                            discovered.insert(new Solution(head));
+                            std::cout << "] is successfully added to [discovered]\n";
+                        }
+
+                        previous_tile = ImVec2(-1, -1);
+                        memset(activated, 0, sizeof(activated));
                     }
 
-                    previous_tile = ImVec2(-1, -1);
-                    memset(activated, 0, sizeof(activated));
+                    // Display Previous
+                    ImGui::Text("Previous Selection");
+                    ImGui::SameLine();
+                    ImGui::Text(previous_word);
+
+                    // Display Current
+                    ImGui::Text("Current Selection:");
+                    ImGui::SameLine();
+                    ImGui::Text(word);
                 }
-            }
-            for (auto a : found_words)
-            {
-                ImGui::Text(a.data());
-            }
 
-            // Draw selection path
-            for (int i = 1; i < word_length; i++)
-            {
-                ImGui::GetForegroundDrawList()->AddLine(TilePath[i - 1], TilePath[i], line_color, line_thickness);
-                ImGui::GetForegroundDrawList()->AddCircleFilled(TilePath[i - 1], line_thickness / 2, line_color);
-            }
+                
+                for (auto a : discovered)
+                {
+                    DisplayWord(a->to_string());
+                }
 
-            // Display Previous
-            ImGui::Text("Previous Selection");
-            ImGui::SameLine();
-            ImGui::Text(previous_word);
-
-            // Display Current
-            ImGui::Text("Current Selection:");
-            ImGui::SameLine();
-            ImGui::Text(word);
-
-            if (0)
-            {
-                static const char* seed_string = game_seed->to_string();
                 static ImVec2 seed_text_dimensions = ImGui::CalcTextSize(seed_string);
-                ImGui::SetCursorPos(ImVec2(ImGui::GetWindowWidth() - (int)seed_text_dimensions.x, ImGui::GetWindowHeight() - (int)seed_text_dimensions.y));
+                ImGui::SetCursorPos(ImGui::GetWindowSize() - seed_text_dimensions - ImVec2(10, 10));
                 ImGui::Text(seed_string);
+
+                if (ImGui::IsItemHovered())
+                {
+                    ImGui::SetMouseCursor(ImGuiMouseCursor_Hand);
+                    if (ImGui::IsItemClicked())
+                    {
+                        ImGui::LogToClipboard();
+                        ImGui::LogText(seed_string);
+                    }
+                }
             }
 
             ImGui::End();
@@ -505,8 +622,8 @@ int main(int, char**)
 
 
                             char randomLabel[10] = "##RTile  ";
-                            randomLabel[7] = row + '1';
-                            randomLabel[8] = col + '1';
+                            randomLabel[7] = char(row + '1');
+                            randomLabel[8] = char(col + '1');
 
                             ImGui::InputText(randomLabel, &data[(col * 10 + row) * 2], 2, textFlags);
 
@@ -555,54 +672,50 @@ int main(int, char**)
             ImGui::ShowDemoWindow(&show_demo_window);
         }
         
+        // Rendering
+        ImGui::Render();
 
+        FrameContext* frameCtx = WaitForNextFrameResources();
+        UINT backBufferIdx = g_pSwapChain->GetCurrentBackBufferIndex();
+        frameCtx->CommandAllocator->Reset();
 
+        D3D12_RESOURCE_BARRIER barrier = {};
+        barrier.Type = D3D12_RESOURCE_BARRIER_TYPE_TRANSITION;
+        barrier.Flags = D3D12_RESOURCE_BARRIER_FLAG_NONE;
+        barrier.Transition.pResource = g_mainRenderTargetResource[backBufferIdx];
+        barrier.Transition.Subresource = D3D12_RESOURCE_BARRIER_ALL_SUBRESOURCES;
+        barrier.Transition.StateBefore = D3D12_RESOURCE_STATE_PRESENT;
+        barrier.Transition.StateAfter = D3D12_RESOURCE_STATE_RENDER_TARGET;
+        g_pd3dCommandList->Reset(frameCtx->CommandAllocator, nullptr);
+        g_pd3dCommandList->ResourceBarrier(1, &barrier);
+
+        // Render Dear ImGui graphics
+        const float clear_color_with_alpha[4] = { clear_color.x * clear_color.w, clear_color.y * clear_color.w, clear_color.z * clear_color.w, clear_color.w };
+        g_pd3dCommandList->ClearRenderTargetView(g_mainRenderTargetDescriptor[backBufferIdx], clear_color_with_alpha, 0, nullptr);
+        g_pd3dCommandList->OMSetRenderTargets(1, &g_mainRenderTargetDescriptor[backBufferIdx], FALSE, nullptr);
+        g_pd3dCommandList->SetDescriptorHeaps(1, &g_pd3dSrvDescHeap);
+        ImGui_ImplDX12_RenderDrawData(ImGui::GetDrawData(), g_pd3dCommandList);
+        barrier.Transition.StateBefore = D3D12_RESOURCE_STATE_RENDER_TARGET;
+        barrier.Transition.StateAfter = D3D12_RESOURCE_STATE_PRESENT;
+        g_pd3dCommandList->ResourceBarrier(1, &barrier);
+        g_pd3dCommandList->Close();
+
+        g_pd3dCommandQueue->ExecuteCommandLists(1, (ID3D12CommandList* const*)&g_pd3dCommandList);
+
+        // Update and Render additional Platform Windows
+        if (io.ConfigFlags & ImGuiConfigFlags_ViewportsEnable)
         {
-            // Rendering
-            ImGui::Render();
-
-            FrameContext* frameCtx = WaitForNextFrameResources();
-            UINT backBufferIdx = g_pSwapChain->GetCurrentBackBufferIndex();
-            frameCtx->CommandAllocator->Reset();
-
-            D3D12_RESOURCE_BARRIER barrier = {};
-            barrier.Type = D3D12_RESOURCE_BARRIER_TYPE_TRANSITION;
-            barrier.Flags = D3D12_RESOURCE_BARRIER_FLAG_NONE;
-            barrier.Transition.pResource = g_mainRenderTargetResource[backBufferIdx];
-            barrier.Transition.Subresource = D3D12_RESOURCE_BARRIER_ALL_SUBRESOURCES;
-            barrier.Transition.StateBefore = D3D12_RESOURCE_STATE_PRESENT;
-            barrier.Transition.StateAfter = D3D12_RESOURCE_STATE_RENDER_TARGET;
-            g_pd3dCommandList->Reset(frameCtx->CommandAllocator, nullptr);
-            g_pd3dCommandList->ResourceBarrier(1, &barrier);
-
-            // Render Dear ImGui graphics
-            const float clear_color_with_alpha[4] = { clear_color.x * clear_color.w, clear_color.y * clear_color.w, clear_color.z * clear_color.w, clear_color.w };
-            g_pd3dCommandList->ClearRenderTargetView(g_mainRenderTargetDescriptor[backBufferIdx], clear_color_with_alpha, 0, nullptr);
-            g_pd3dCommandList->OMSetRenderTargets(1, &g_mainRenderTargetDescriptor[backBufferIdx], FALSE, nullptr);
-            g_pd3dCommandList->SetDescriptorHeaps(1, &g_pd3dSrvDescHeap);
-            ImGui_ImplDX12_RenderDrawData(ImGui::GetDrawData(), g_pd3dCommandList);
-            barrier.Transition.StateBefore = D3D12_RESOURCE_STATE_RENDER_TARGET;
-            barrier.Transition.StateAfter = D3D12_RESOURCE_STATE_PRESENT;
-            g_pd3dCommandList->ResourceBarrier(1, &barrier);
-            g_pd3dCommandList->Close();
-
-            g_pd3dCommandQueue->ExecuteCommandLists(1, (ID3D12CommandList* const*)&g_pd3dCommandList);
-
-            // Update and Render additional Platform Windows
-            if (io.ConfigFlags & ImGuiConfigFlags_ViewportsEnable)
-            {
-                ImGui::UpdatePlatformWindows();
-                ImGui::RenderPlatformWindowsDefault(nullptr, (void*)g_pd3dCommandList);
-            }
-
-            g_pSwapChain->Present(1, 0); // Present with vsync
-            //g_pSwapChain->Present(0, 0); // Present without vsync
-
-            UINT64 fenceValue = g_fenceLastSignaledValue + 1;
-            g_pd3dCommandQueue->Signal(g_fence, fenceValue);
-            g_fenceLastSignaledValue = fenceValue;
-            frameCtx->FenceValue = fenceValue;
+            ImGui::UpdatePlatformWindows();
+            ImGui::RenderPlatformWindowsDefault(nullptr, (void*)g_pd3dCommandList);
         }
+
+        g_pSwapChain->Present(1, 0); // Present with vsync
+        //g_pSwapChain->Present(0, 0); // Present without vsync
+
+        UINT64 fenceValue = g_fenceLastSignaledValue + 1;
+        g_pd3dCommandQueue->Signal(g_fence, fenceValue);
+        g_fenceLastSignaledValue = fenceValue;
+        frameCtx->FenceValue = fenceValue;
     }
 
     WaitForLastSubmittedFrame();
@@ -857,11 +970,16 @@ LRESULT WINAPI WndProc(HWND hWnd, UINT msg, WPARAM wParam, LPARAM lParam)
 
 void GenerateRandomGame(char* s, const size_t len, int seed) {
     std::mt19937 rng(seed);
-    char* characterSet = "EEEEEEEEEEEEAAAAAAAAAIIIIIIIIIOOOOOOOONNNNNNRRRRRRTTTTTTLLLLSSSSUUUUDDDDGGGBBCCMMPPFFHHVVWWYYKJXQZ";
+    const static char* characterSet = "EEEEEEEEEEEEAAAAAAAAAIIIIIIIIIOOOOOOOONNNNNNRRRRRRTTTTTTLLLLSSSSUUUUDDDDGGGBBCCMMPPFFHHVVWWYYKJXQZ";
     for (size_t i = 0; i < len * 2; i += 2) {
-        s[i] = characterSet[std::uniform_int_distribution<int>(0, 98)(rng)];
+        s[i] = characterSet[std::uniform_int_distribution<int>(0, 97)(rng)];
         s[i + 1] = 0;
     }
+    std::cout << "\n";
     s[len * 2] = 0;
 }
 
+void DisplayWord(const char* Text)
+{
+    ImGui::Text(Text);
+}
