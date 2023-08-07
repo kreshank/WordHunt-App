@@ -77,7 +77,8 @@ LRESULT WINAPI WndProc(HWND hWnd, UINT msg, WPARAM wParam, LPARAM lParam);
 void GenerateRandomGame(char* s, const size_t len, int seed = 0);
 
 // Forward declarations of drawing functions
-void DisplayWord(const char* Text);
+bool SolutionItem(Solution* entry, const ImVec2& size, ImU32 solution_color, ImGuiWindowFlags flags = 0);
+bool DrawSelectionPath(const ImVec2* tile_path_pos, const int word_length, ImU32 line_color, const float line_thickness);
 
 
 // Main code
@@ -207,10 +208,10 @@ int main(int, char**)
     static auto         start_timer = std::chrono::high_resolution_clock::now();
     static auto         end_timer = std::chrono::high_resolution_clock::now() + std::chrono::seconds(80);
     static auto         timer_delta = std::chrono::duration_cast<std::chrono::seconds>(end_timer - start_timer);
-    static const float  game_length_seconds = 10.0f;
+    static const float  game_length_seconds = 100.0f;
 
     std::mt19937 rng((unsigned int)__rdtsc()); // random function
-    static int game_phase = WordHuntGamePhase_Generate;
+    static int game_phase = WordHuntGamePhase_Selection;
     static Seed* game_seed;
     static char seed_string[256] = "";
 
@@ -255,7 +256,7 @@ int main(int, char**)
             {
                 ImGui::SetWindowFocus();
                 show_random_game = true;
-                game_phase = WordHuntGamePhase_Generate;
+                game_phase = WordHuntGamePhase_Selection;
                 game_seed = new Seed(std::uniform_int_distribution<int>(0, UINT_MAX)(rng));
                 discovered.clear();
                 found_words.clear();
@@ -278,7 +279,7 @@ int main(int, char**)
         if (show_random_game)
         {
             // Forward declaration of variable
-
+            ImGui::PushStyleVar(ImGuiStyleVar_WindowMinSize, ImVec2(700, 700));
             ImGui::Begin("Word Hunt", &show_random_game, ImGuiWindowFlags_NoDocking | ImGuiWindowFlags_NoCollapse | ImGuiWindowFlags_NoScrollbar);
 
             static char letters[256] = "";
@@ -288,7 +289,7 @@ int main(int, char**)
 
             // [SECTION] - GAME SETTING SELECTORS
 
-            if (game_phase == WordHuntGamePhase_Generate)
+            if (game_phase == WordHuntGamePhase_Selection)
             {
                 static char seed_buffer[256] = "Enter a seed or ignore and continue.";
                 ImGui::InputText("##seed input", seed_buffer, 256, ImGuiInputTextFlags_AutoSelectAll | ImGuiInputTextFlags_CharsNoBlank);
@@ -309,21 +310,19 @@ int main(int, char**)
                     else {
                         game_seed = new Seed(seed_buffer);
                         seed_button_text = "Seed loaded!";
-                        game_phase = WordHuntGamePhase_Selection;
+                        game_phase = WordHuntGamePhase_Generate;
                     }
                 }
 
                 if (ImGui::Button("Begin Random Game"))
                 {
-                    game_phase = WordHuntGamePhase_Selection;
+                    game_phase = WordHuntGamePhase_Generate;
                 }
-                if (game_phase != WordHuntGamePhase_Generate)
+                if (game_phase != WordHuntGamePhase_Selection)
                 {
                     strcpy_s(seed_buffer, "Enter a seed or ignore and continue.");
                 }
             }
-            //R4C4>1111111111111111[3556389293]
-
 
             if (game_phase == WordHuntGamePhase_Generate)
             {
@@ -366,32 +365,36 @@ int main(int, char**)
                     auto delta = std::chrono::duration_cast<std::chrono::milliseconds>(std::chrono::high_resolution_clock::now() - start_timer);
                     float passed_percentage = float(delta.count() / (game_length_seconds * 1000.0f));
 
-                    ImGui::SetCursorPosX((ImGui::GetWindowWidth() - clock_width) * 0.5f);
+                    ImVec2 clock_position = ImVec2((ImGui::GetWindowWidth() - clock_width) * 0.5f, ImGui::GetCursorStartPos().y);
+                    ImGui::SetCursorPos(clock_position);
                     ImVec2 clock_absolute_center = ImGui::GetCursorScreenPos() + ImVec2(clock_width * 0.5f, clock_height * 0.5f);
-                    ImGui::BeginChild("Clock", ImVec2(clock_width, clock_height), true, ImGuiWindowFlags_NoDecoration | ImGuiWindowFlags_NoInputs);
-
-                    ImGui::GetForegroundDrawList()->AddCircleFilled(clock_absolute_center, clock_outer_radius, clock_rim_color);
-                    ImGui::GetForegroundDrawList()->AddCircleFilled(clock_absolute_center, clock_inner_radius, clock_center_color);
-                    if (passed_percentage < 1.0f)
+                    if (ImGui::BeginChild("Clock", ImVec2(clock_width, clock_height), false, ImGuiWindowFlags_NoDecoration | ImGuiWindowFlags_NoInputs))
                     {
-                        ImGui::GetForegroundDrawList()->_Path.push_back(clock_absolute_center);
-                        ImGui::GetForegroundDrawList()->PathArcTo(clock_absolute_center, clock_inner_radius, -IM_PI * 0.5f, IM_PI * (passed_percentage * 2.0f - 0.5f));
-                        ImGui::GetForegroundDrawList()->PathFillConvex(clock_passed_color);
-                    }
-                    else
-                    {
-                        game_phase = WordHuntGamePhase_Result;
-                        ImGui::GetForegroundDrawList()->AddCircleFilled(clock_absolute_center, clock_inner_radius, clock_passed_color);
-                    }
+                        ImGui::GetForegroundDrawList()->AddCircleFilled(clock_absolute_center, clock_outer_radius, clock_rim_color);
+                        ImGui::GetForegroundDrawList()->AddCircleFilled(clock_absolute_center, clock_inner_radius, clock_center_color);
+                        if (passed_percentage < 1.0f)
+                        {
+                            ImGui::GetForegroundDrawList()->_Path.push_back(clock_absolute_center);
+                            ImGui::GetForegroundDrawList()->PathArcTo(clock_absolute_center, clock_inner_radius, -IM_PI * 0.5f, IM_PI * (passed_percentage * 2.0f - 0.5f));
+                            ImGui::GetForegroundDrawList()->PathFillConvex(clock_passed_color);
+                        }
+                        else
+                        {
+                            game_phase = WordHuntGamePhase_Result;
+                            word_length = 0;
+                            memset(activated, 0, sizeof(activated));
+                            ImGui::GetForegroundDrawList()->_ResetForNewFrame();
+                            ImGui::GetForegroundDrawList()->AddCircleFilled(clock_absolute_center, clock_inner_radius, clock_passed_color);
+                        }
 
-                    for (int i = 0; i < clock_tick_quantity; i++)
-                    {
-                        ImVec2 angle = ImVec2(cosf(i * clock_angle_step), sinf(i * clock_angle_step));
-                        ImVec2 p1 = ImVec2(clock_inner_radius, clock_inner_radius) * angle + clock_absolute_center;
-                        ImVec2 p2 = p1 - ImVec2(clock_tick_length, clock_tick_length) * angle;
-                        ImGui::GetForegroundDrawList()->AddLine(p1, p2, clock_tick_color);
+                        for (int i = 0; i < clock_tick_quantity; i++)
+                        {
+                            ImVec2 angle = ImVec2(cosf(i * clock_angle_step), sinf(i * clock_angle_step));
+                            ImVec2 p1 = ImVec2(clock_inner_radius, clock_inner_radius) * angle + clock_absolute_center;
+                            ImVec2 p2 = p1 - ImVec2(clock_tick_length, clock_tick_length) * angle;
+                            ImGui::GetForegroundDrawList()->AddLine(p1, p2, clock_tick_color);
+                        }
                     }
-
                     ImGui::EndChild();
                 }
 
@@ -416,11 +419,8 @@ int main(int, char**)
                 }
 
                 // Draw selection path
-                for (int i = 1; i < word_length; i++)
-                {
-                    ImGui::GetForegroundDrawList()->AddLine(tile_path_pos[i - 1], tile_path_pos[i], line_color, line_thickness);
-                    ImGui::GetForegroundDrawList()->AddCircleFilled(tile_path_pos[i - 1], line_thickness / 2, line_color);
-                }
+
+                DrawSelectionPath(tile_path_pos, word_length, line_color, line_thickness);
 
                 // Create a style for the Tiles
                 // Rounded square tiles, black serif font
@@ -429,83 +429,91 @@ int main(int, char**)
                 ImGui::PushFont(io.Fonts->Fonts[1]);
                 
                 // Center the board
-                ImGui::SetCursorPosX((ImGui::GetWindowWidth() - board_size.x) * 0.5f);
-                ImGui::BeginChild("Board", board_size, false, ImGuiWindowFlags_NoBackground | ImGuiWindowFlags_NoMove);
-
-                for (int row = 0; row < num_rows; row++)
+                ImVec2 board_pos = ImVec2((ImGui::GetWindowWidth() - board_size.x) * 0.5f, ImGui::GetCursorPosY());
+                ImGui::SetCursorPos(board_pos);
+                if (ImGui::BeginChild("Board", board_size, false, ImGuiWindowFlags_NoBackground | ImGuiWindowFlags_NoMove | ImGuiWindowFlags_NoScrollbar))
                 {
-                    for (int column = 0; column < num_columns; column++)
+                    for (int row = 0; row < num_rows; row++)
                     {
-                        if (column) ImGui::SameLine();
-
-                        // Creating a unique tile ID for each
-                        char TileID[7] = "Tile  ";
-                        TileID[4] = char(row + 1);
-                        TileID[5] = char(column + 1);
-
-                        ImU32 tile_color = default_board_color;
-                        if (activated[row][column])
+                        for (int column = 0; column < num_columns; column++)
                         {
-                            if (word_length > 2 && currently_is_word)
+                            if (column) ImGui::SameLine();
+
+                            // Creating a unique tile ID for each
+                            char TileID[7] = "Tile  ";
+                            TileID[4] = char(row + 1);
+                            TileID[5] = char(column + 1);
+
+                            ImU32 tile_color = default_board_color;
+                            if (activated[row][column])
                             {
-                                word_str = std::string(word, word + word_length);
-                                if (found_words.find(word_str) == found_words.end())
+                                // TODO - Find a suitable way to make the after-game hover work
+                                if (game_phase == WordHuntGamePhase_Result)
                                 {
                                     tile_color = pale_green;
                                 }
+                                else if (word_length > 2 && currently_is_word)
+                                {
+                                    word_str = std::string(word, word + word_length);
+                                    if (found_words.find(word_str) == found_words.end())
+                                    {
+                                        tile_color = pale_green;
+                                    }
+                                    else
+                                    {
+                                        tile_color = bright_yellow;
+                                    }
+                                }
                                 else
                                 {
-                                    tile_color = bright_yellow;
+                                    tile_color = pale_white;
                                 }
                             }
-                            else
+
+                            ImGui::PushStyleColor(ImGuiCol_ChildBg, tile_color);
+                            // Tile Creation
+                            if (ImGui::BeginChild(TileID, ImVec2(TileWidth, TileHeight), true, ImGuiWindowFlags_NoScrollbar | ImGuiWindowFlags_NoMove))
                             {
-                                tile_color = pale_white;
-                            }
-                        }
+                                tile_centers[row][column] = ImGui::GetWindowPos() + ImVec2(TileWidth / 2, TileHeight / 2);
 
-                        ImGui::PushStyleColor(ImGuiCol_ChildBg, tile_color);
-                        // Tile Creation
-                        ImGui::BeginChild(TileID, ImVec2(TileWidth, TileHeight), true, ImGuiWindowFlags_NoScrollbar | ImGuiWindowFlags_NoMove);
-                        tile_centers[row][column] = ImGui::GetWindowPos() + ImVec2(TileWidth / 2, TileHeight / 2);
+                                // Center and print tile
+                                char* visible_character = &letters[(row * num_rows + column) * 2];
+                                ImVec2 text_dimensions = ImGui::CalcTextSize(visible_character);
+                                ImGui::SetCursorPos((ImVec2(TileWidth, TileHeight) - text_dimensions) * 0.5f);
+                                ImGui::Text(visible_character);
 
-                        // Center and print tile
-                        char* visible_character = &letters[(row * num_rows + column) * 2];
-                        ImVec2 text_dimensions = ImGui::CalcTextSize(visible_character);
-                        ImGui::SetCursorPos((ImVec2(TileWidth, TileHeight) - text_dimensions) * 0.5f);
-                        ImGui::Text(visible_character);
-
-                        // Check if hovering over a tile
-                        if (game_phase == WordHuntGamePhase_Play)
-                        {
-                            ImGui::SetCursorPos(ImVec2());
-                            ImVec2 hitbox_min = ImGui::GetCursorScreenPos() + ImVec2(TilePadding, TilePadding);
-                            ImVec2 hitbox_max = hitbox_min + ImVec2(TileWidth, TileHeight);
-                            if (ImGui::IsMouseHoveringRect(hitbox_min, hitbox_max) && ImGui::IsMouseDown(ImGuiMouseButton_Left))
-                            {
-                                if (!activated[row][column] && ((previous_tile.x == -1 && previous_tile.y == -1) || (abs(previous_tile.x - row) <= 1 && abs(previous_tile.y - column) <= 1)))
+                                // Check if hovering over a tile
+                                if (game_phase == WordHuntGamePhase_Play)
                                 {
-                                    activated[row][column] = 1;
-                                    char letter = visible_character[0];
-                                    word[word_length] = letter;
-                                    tile_path_id[word_length] = ImVec2(float(row), float(column));
-                                    tile_path_pos[word_length++] = tile_centers[row][column];
-                                    word[word_length] = 0;
-                                    previous_tile = ImVec2(float(row), float(column));
-                                }
-                                if (word_length)
-                                {
-                                    ImGui::GetForegroundDrawList()->AddLine(tile_path_pos[word_length - 1], io.MousePos, line_color, line_thickness);
-                                    ImGui::GetForegroundDrawList()->AddCircleFilled(io.MousePos, line_thickness / 2, line_color);
+                                    ImGui::SetCursorPos(ImVec2());
+                                    ImVec2 hitbox_min = ImGui::GetCursorScreenPos() + ImVec2(TilePadding, TilePadding);
+                                    ImVec2 hitbox_max = hitbox_min + ImVec2(TileWidth, TileHeight);
+                                    if (ImGui::IsMouseHoveringRect(hitbox_min, hitbox_max) && ImGui::IsMouseDown(ImGuiMouseButton_Left))
+                                    {
+                                        if (!activated[row][column] && ((previous_tile.x == -1 && previous_tile.y == -1) || (abs(previous_tile.x - row) <= 1 && abs(previous_tile.y - column) <= 1)))
+                                        {
+                                            activated[row][column] = 1;
+                                            char letter = visible_character[0];
+                                            word[word_length] = letter;
+                                            tile_path_id[word_length] = ImVec2(float(row), float(column));
+                                            tile_path_pos[word_length++] = tile_centers[row][column];
+                                            word[word_length] = 0;
+                                            previous_tile = ImVec2(float(row), float(column));
+                                        }
+                                        if (word_length)
+                                        {
+                                            ImGui::GetForegroundDrawList()->AddLine(tile_path_pos[word_length - 1], io.MousePos, line_color, line_thickness);
+                                            ImGui::GetForegroundDrawList()->AddCircleFilled(io.MousePos, line_thickness / 2, line_color);
+                                        }
+                                    }
                                 }
                             }
-                        }
-                        ImGui::EndChild();
+                            ImGui::EndChild();
 
-                        ImGui::PopStyleColor();
+                            ImGui::PopStyleColor();
+                        }
                     }
                 }
-
                 ImGui::EndChild();
 
                 ImGui::PopFont();
@@ -555,11 +563,48 @@ int main(int, char**)
                     ImGui::Text(word);
                 }
 
-                
-                for (auto a : discovered)
+                ImVec2 solution_explorer_pos = ImVec2(0, board_pos.y);
+                ImGui::SetCursorPos(solution_explorer_pos);
+                if (ImGui::BeginChild("solution explorer", ImVec2(board_pos.x, board_size.y), true, ImGuiWindowFlags_NoScrollbar | ImGuiWindowFlags_NoMove))
                 {
-                    DisplayWord(a->to_string());
+                    ImGui::PushStyleVar(ImGuiStyleVar_ChildRounding, 5.0f);
+                    ImGui::Text("WORDS FOUND");
+                    ImGui::PushStyleColor(ImGuiCol_Text, IM_COL32(0, 0, 0, 255));
+                    ImGui::PushFont(io.Fonts->Fonts[0]);
+
+
+                    static const ImVec2 solution_size = ImVec2(0, 25);
+                    for (Solution* a : discovered)
+                    {
+                        if (SolutionItem(a, solution_size, default_board_color, ImGuiWindowFlags_NoMouseInputs) && game_phase == WordHuntGamePhase_Result)
+                        {
+                            word_length = a->length;
+                            Tile* head = a->head;
+                            int i = 0;
+                            while (head)
+                            {
+                                tile_path_pos[i++] = tile_centers[head->x][head->y];
+                                activated[head->x][head->y] = true;
+                                head = head->next;
+                            }
+                            line_color = pale_white;
+                            DrawSelectionPath(tile_path_pos, word_length, line_color, line_thickness);
+
+                            head = a->head;
+                            i = 0;
+                            while (head)
+                            {
+                                activated[head->x][head->y] = false;
+                                head = head->next;
+                            }
+                            word_length = 0;
+                        }
+                    }
+                    ImGui::PopFont();
+                    ImGui::PopStyleColor();
+                    ImGui::PopStyleVar();
                 }
+                ImGui::EndChild();
 
                 static ImVec2 seed_text_dimensions = ImGui::CalcTextSize(seed_string);
                 ImGui::SetCursorPos(ImGui::GetWindowSize() - seed_text_dimensions - ImVec2(10, 10));
@@ -577,6 +622,7 @@ int main(int, char**)
             }
 
             ImGui::End();
+            ImGui::PopStyleVar();
         }
 
         if (show_custom_game)
@@ -979,7 +1025,54 @@ void GenerateRandomGame(char* s, const size_t len, int seed) {
     s[len * 2] = 0;
 }
 
-void DisplayWord(const char* Text)
+// Returns true if solution item hovered
+bool SolutionItem(Solution* entry, const ImVec2& size, ImU32 solution_color, ImGuiWindowFlags flags)
 {
-    ImGui::Text(Text);
+    std::string solution_id = entry->to_string();
+    solution_id += " tile";
+    bool is_hovered = false;
+    if (ImGui::BeginChild(solution_id.data(), size, false, flags))
+    {
+        ImVec2 text_dimensions = ImGui::CalcTextSize(entry->word);
+        ImVec2 padding = ImVec2(5, 2.5f);
+
+        static char buf[6] = { 0 };
+        int point_value = WordHunt::PointValues[entry->length], i = 4;
+        while (point_value && i)
+        {
+            buf[i--] = "0123456789"[point_value % 10];
+            point_value /= 10;
+        }
+
+        ImVec2 point_dimensions = ImGui::CalcTextSize(&buf[i + 1]);
+
+        ImGui::PushStyleColor(ImGuiCol_ChildBg, solution_color);
+
+        if (ImGui::BeginChild(entry->word, text_dimensions + padding * 2))
+        {
+            ImGui::SetCursorPos(padding);
+            ImGui::Text(entry->word);
+        }
+        ImGui::EndChild();
+
+        ImGui::PopStyleColor();
+
+        ImGui::SetCursorPos(ImGui::GetWindowSize() - point_dimensions - padding);
+        ImGui::PushStyleColor(ImGuiCol_Text, IM_COL32(255, 255, 255, 255));
+        ImGui::Text(&buf[i + 1]);
+        ImGui::PopStyleColor();
+    }
+    is_hovered = ImGui::IsWindowHovered(ImGuiHoveredFlags_ChildWindows);
+    ImGui::EndChild();
+    return is_hovered;
+}
+
+bool DrawSelectionPath(const ImVec2* tile_path_pos, const int word_length, ImU32 line_color, const float line_thickness)
+{
+    for (int i = 1; i < word_length; i++)
+    {
+        ImGui::GetForegroundDrawList()->AddLine(tile_path_pos[i - 1], tile_path_pos[i], line_color, line_thickness);
+        ImGui::GetForegroundDrawList()->AddCircleFilled(tile_path_pos[i - 1], line_thickness / 2, line_color);
+    }
+    return true;
 }
