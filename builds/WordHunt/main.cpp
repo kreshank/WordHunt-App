@@ -10,7 +10,7 @@
 
 #define IMGUI_DEFINE_MATH_OPERATORS
 
-#include "imgui.h"
+#include "imgui/imgui.h"
 #include "imgui_impl_win32.h"
 #include "imgui_impl_dx12.h"
 #include <d3d12.h>
@@ -74,7 +74,6 @@ void CleanupRenderTarget();
 void WaitForLastSubmittedFrame();
 FrameContext* WaitForNextFrameResources();
 LRESULT WINAPI WndProc(HWND hWnd, UINT msg, WPARAM wParam, LPARAM lParam);
-void GenerateRandomGame(char* s, const size_t len, int seed = 0);
 
 // Forward declarations of drawing functions
 bool SolutionItem(Solution* entry, const ImVec2& size, ImU32 solution_color, ImGuiWindowFlags flags = 0);
@@ -153,7 +152,8 @@ int main(int, char**)
     io.Fonts->AddFontFromFileTTF("../../misc/fonts/NotoSerif-SemiBold.ttf", 80.0f);
 
     // WordHunt setup
-    Dictionary* current_dictionary = WordHunt::CreateDictionary("../../misc/files/dictionary.txt");
+    WordHunt::Setup("../../misc/files/dictionary.txt");
+    Dictionary* current_dictionary = WordHunt::GetDefaultDictionary();
 
     // Our state
     bool        show_demo_window = false;
@@ -257,7 +257,7 @@ int main(int, char**)
                 ImGui::SetWindowFocus();
                 show_random_game = true;
                 game_phase = WordHuntGamePhase_Selection;
-                game_seed = new Seed(std::uniform_int_distribution<int>(0, UINT_MAX)(rng));
+                game_seed = new Seed(std::uniform_int_distribution<int>(0, INT_MAX)(rng));
                 discovered.clear();
                 found_words.clear();
             }
@@ -337,7 +337,7 @@ int main(int, char**)
                     index++;
                 }
 
-                GenerateRandomGame(letters, num_tiles, game_seed->seed_value);
+                WordHunt::GenerateGame(letters, num_tiles, game_seed->seed_value);
                 game_phase = WordHuntGamePhase_Play;
                 start_timer = std::chrono::high_resolution_clock::now();
                 end_timer = start_timer + std::chrono::seconds(int(game_length_seconds));
@@ -400,12 +400,10 @@ int main(int, char**)
 
                 // DRAW GAME BOARD
                 const float         TilePadding = 12.0f;
-                static float        TileWidth = IM_CLAMP(ImGui::GetWindowWidth() / (num_rows + 1), 75, 100);
-                static float        TileHeight = IM_CLAMP(ImGui::GetWindowHeight() / (num_columns + 1), 75, TileWidth);
-                TileWidth = TileHeight;
+                const ImVec2        tile_size = ImVec2(100, 100);
 
                 static ImVec2       previous_tile = ImVec2(-1, -1);
-                ImVec2 board_size = ImVec2(TileWidth, TileHeight) * ImVec2(float(num_columns), float(num_rows)) + style.ItemSpacing * ImVec2(float(num_columns - 1), float(num_rows - 1));
+                ImVec2 board_size = ImVec2(tile_size.x, tile_size.y) * ImVec2(float(num_columns), float(num_rows)) + style.ItemSpacing * ImVec2(float(num_columns - 1), float(num_rows - 1));
 
                 // Set correct color theme
                 currently_is_word = current_dictionary->IsWord(word, word_length);
@@ -472,14 +470,14 @@ int main(int, char**)
 
                             ImGui::PushStyleColor(ImGuiCol_ChildBg, tile_color);
                             // Tile Creation
-                            if (ImGui::BeginChild(TileID, ImVec2(TileWidth, TileHeight), true, ImGuiWindowFlags_NoScrollbar | ImGuiWindowFlags_NoMove))
+                            if (ImGui::BeginChild(TileID, tile_size, true, ImGuiWindowFlags_NoScrollbar | ImGuiWindowFlags_NoMove))
                             {
-                                tile_centers[row][column] = ImGui::GetWindowPos() + ImVec2(TileWidth / 2, TileHeight / 2);
+                                tile_centers[row][column] = ImGui::GetWindowPos() + tile_size / 2.0f;
 
                                 // Center and print tile
                                 char* visible_character = &letters[(row * num_rows + column) * 2];
                                 ImVec2 text_dimensions = ImGui::CalcTextSize(visible_character);
-                                ImGui::SetCursorPos((ImVec2(TileWidth, TileHeight) - text_dimensions) * 0.5f);
+                                ImGui::SetCursorPos((tile_size - text_dimensions) * 0.5f);
                                 ImGui::Text(visible_character);
 
                                 // Check if hovering over a tile
@@ -487,7 +485,7 @@ int main(int, char**)
                                 {
                                     ImGui::SetCursorPos(ImVec2());
                                     ImVec2 hitbox_min = ImGui::GetCursorScreenPos() + ImVec2(TilePadding, TilePadding);
-                                    ImVec2 hitbox_max = hitbox_min + ImVec2(TileWidth, TileHeight);
+                                    ImVec2 hitbox_max = hitbox_min + tile_size;
                                     if (ImGui::IsMouseHoveringRect(hitbox_min, hitbox_max) && ImGui::IsMouseDown(ImGuiMouseButton_Left))
                                     {
                                         if (!activated[row][column] && ((previous_tile.x == -1 && previous_tile.y == -1) || (abs(previous_tile.x - row) <= 1 && abs(previous_tile.y - column) <= 1)))
@@ -1014,17 +1012,6 @@ LRESULT WINAPI WndProc(HWND hWnd, UINT msg, WPARAM wParam, LPARAM lParam)
     return ::DefWindowProcW(hWnd, msg, wParam, lParam);
 }
 
-void GenerateRandomGame(char* s, const size_t len, int seed) {
-    std::mt19937 rng(seed);
-    const static char* characterSet = "EEEEEEEEEEEEAAAAAAAAAIIIIIIIIIOOOOOOOONNNNNNRRRRRRTTTTTTLLLLSSSSUUUUDDDDGGGBBCCMMPPFFHHVVWWYYKJXQZ";
-    for (size_t i = 0; i < len * 2; i += 2) {
-        s[i] = characterSet[std::uniform_int_distribution<int>(0, 97)(rng)];
-        s[i + 1] = 0;
-    }
-    std::cout << "\n";
-    s[len * 2] = 0;
-}
-
 // Returns true if solution item hovered
 bool SolutionItem(Solution* entry, const ImVec2& size, ImU32 solution_color, ImGuiWindowFlags flags)
 {
@@ -1037,7 +1024,7 @@ bool SolutionItem(Solution* entry, const ImVec2& size, ImU32 solution_color, ImG
         ImVec2 padding = ImVec2(5, 2.5f);
 
         static char buf[6] = { 0 };
-        int point_value = WordHunt::PointValues[entry->length], i = 4;
+        int point_value = WordHunt::GetPointVal(entry->length), i = 4;
         while (point_value && i)
         {
             buf[i--] = "0123456789"[point_value % 10];

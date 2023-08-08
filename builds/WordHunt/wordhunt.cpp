@@ -5,8 +5,7 @@
 // [SECTION] WORDHUNT FUNCTIONS
 
 #include "wordhunt.h"
-
-static Dictionary* default_dictionary;
+#include <random>
 
 //-------------------------------------------------------------------------
 // [SECTION] STRUCT CONSTRUCTOR
@@ -100,6 +99,7 @@ Seed::Seed(unsigned int _seed_value)
     seed_value = _seed_value;
     rows = 4;
     cols = 4;
+    time_seconds = 75;
     memset(board, 0, sizeof(board));
     for (int row = 0; row < rows; row++)
     {
@@ -150,6 +150,14 @@ Seed::Seed(char* _complete_seed)
             seed_value *= 10;
             seed_value += _complete_seed[index++] - '0';
         }
+        index++; // skip ']'
+        index++; // skip 't'
+        time_seconds = 0;
+        while (isdigit(_complete_seed[index]))
+        {
+            time_seconds *= 10;
+            time_seconds += _complete_seed[index++] - '0';
+        }
     }
     else
     {
@@ -162,6 +170,8 @@ Seed::Seed(char* _complete_seed)
         }
         rows = 4;
         cols = 4;
+        index++;
+        time_seconds = 75;
 
         for (int row = 0; row < rows; row++)
         {
@@ -209,6 +219,20 @@ char* Seed::to_string()
     }
 
     output.push_back(']');
+    output.push_back('t');
+    int temp_time_seconds = time_seconds;
+    start = 9;
+    while (temp_time_seconds && start >= 0)
+    {
+        temp[start] = "0123456789"[temp_time_seconds % 10];
+        start--;
+        temp_time_seconds /= 10;
+    }
+    while (start < 9)
+    {
+        output.push_back(temp[++start]);
+    }
+
 
     static char out[256] = { 0 };
     for (int i = 0; i < output.size(); i++)
@@ -219,11 +243,98 @@ char* Seed::to_string()
     return out;
 }
 
+// [STRUCT] Solver
+Solver::Solver(char* letters, Seed* seed)
+{
+    for (int row = 0; row < seed->rows; row++)
+    {
+        grid.push_back(std::vector<char>());
+        for (int col = 0; col < seed->cols; col++)
+        {
+            grid[row].push_back(letters[row * seed->rows + col]);
+        }
+    }
+    visited = std::vector<std::vector<bool>>(seed->rows, std::vector<bool>(seed->cols, false));
+};
+
 //-------------------------------------------------------------------------
 // [SECTION] WORDHUNT CONSTRUCTORS
 //-------------------------------------------------------------------------
 
-Dictionary* WordHunt::CreateDictionary(const char* fileName)
+
+static Dictionary*              default_dictionary;
+static std::vector<Dictionary*> dictionaries;
+static int                      min_word_length;
+static int                      max_points;
+static const int                point_values[] = { 0,0,0,100,400,800,1200,1600,2000,2400,2800 };
+static std::set<Solution*>      solution_list;
+static Seed*                    seed;
+
+// Variable Getters and Setters
+int WordHunt::GetMinWordLength()
+{
+    return min_word_length;
+}
+
+void WordHunt::SetMinWordLength(const int _word_len)
+{
+    min_word_length = _word_len;
+}
+
+int WordHunt::GetMaxPoints()
+{
+    return max_points;
+}
+
+void WordHunt::SetMaxPoints(const int _max_points)
+{
+    max_points = _max_points;
+}
+
+int WordHunt::GetPointVal(const int word_length)
+{
+    return point_values[word_length];
+}
+
+void WordHunt::SetDictAsDefault(Dictionary* dict)
+{
+    default_dictionary = dict;
+}
+
+Dictionary* WordHunt::GetDefaultDictionary()
+{
+    return default_dictionary;
+}
+
+std::vector<Dictionary*> WordHunt::GetDictionaries()
+{
+    return dictionaries;
+}
+
+void WordHunt::SetCurrentSeed(Seed* _seed)
+{
+    seed = _seed;
+}
+
+Seed* WordHunt::GetCurrentSeed()
+{
+    return seed;
+}
+
+// Setup function
+void WordHunt::GenerateGame(char* s, const size_t len, int seed)
+{
+    std::mt19937 rng(seed);
+    const static char* characterSet = "EEEEEEEEEEEEAAAAAAAAAIIIIIIIIIOOOOOOOONNNNNNRRRRRRTTTTTTLLLLSSSSUUUUDDDDGGGBBCCMMPPFFHHVVWWYYKJXQZ";
+    for (size_t i = 0; i < len * 2; i += 2) {
+        s[i] = characterSet[std::uniform_int_distribution<int>(0, 97)(rng)];
+        s[i + 1] = 0;
+    }
+    std::cout << "\n";
+    s[len * 2] = 0;
+}
+
+Dictionary* WordHunt::AddDictionary(const char* fileName)
 {
     std::ifstream fin(fileName);
 
@@ -242,27 +353,9 @@ Dictionary* WordHunt::CreateDictionary(const char* fileName)
         new_dictionary->AddWord(buffer, word_size);
         word_size = 0;
     }
+    dictionaries.push_back(new_dictionary);
     return new_dictionary;
 }
-
-inline void WordHunt::SetDictAsDefault(Dictionary* dict)
-{
-    default_dictionary = dict;
-}
-
-inline Dictionary* WordHunt::GetDefaultDictionary()
-{
-    return default_dictionary;
-}
-
-inline Board WordHunt::GetCurrentBoard()
-{
-    return board;
-}
-
-void WordHunt::Setup();
-void WordHunt::LoadBoard();
-void WordHunt::SetupSolver();
 
 int WordHunt::IsValidSeed(char* potential_seed)
 {
@@ -325,7 +418,20 @@ int WordHunt::IsValidSeed(char* potential_seed)
             temp_seed *= 10;
             temp_seed += potential_seed[index++] - '0';
         }
-        return (potential_seed[index] == ']') ? 1 : -1;
+        if (potential_seed[index++] != ']')
+        {
+            return -1;
+        }
+        if (potential_seed[index++] != 't')
+        {
+            return -1;
+        }
+        int counter = 0;
+        while (potential_seed[index++] != 0)
+        {
+            counter++;
+        }
+        return (counter && counter < 5) ? 1 : -1;
     }
     else if (potential_seed[index] == '[')
     {
@@ -348,4 +454,26 @@ int WordHunt::IsValidSeed(char* potential_seed)
     {
         return -1;
     }
+}
+
+void WordHunt::Setup(char* file_name)
+{
+    SetMinWordLength(3);
+    SetMaxPoints(0);
+    SetDictAsDefault(AddDictionary(file_name));
+}
+
+/*
+static Dictionary*              default_dictionary;
+static std::vector<Dictionary*> dictionaries;
+static int                      min_word_length;
+static int                      max_points;
+static const int                point_values[] = { 0,0,0,100,400,800,1200,1600,2000,2400,2800 };
+static std::set<Solution*>      solution_list;
+static Seed*                    seed;
+*/
+
+void WordHunt::SolveCurrentSeed(char* letters)
+{
+    Solver* solve = new Solver(letters, WordHunt::GetCurrentSeed());
 }

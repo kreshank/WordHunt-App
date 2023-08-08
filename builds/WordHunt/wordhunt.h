@@ -11,7 +11,7 @@ struct Solution;
 struct Tile;
 struct Seed;
 struct SolutionPointerComparator;
-struct Board;
+struct Solver;
 
 enum WordHuntGamePhase_
 {
@@ -24,27 +24,23 @@ enum WordHuntGamePhase_
 namespace WordHunt
 {
     // Variable Getters and Setters
-    inline int          GetMinWordLength();
-    inline void         SetMinWordLength(const int _word_len = 3);
-    inline int          GetMaxPoints();
-    inline void         SetMaxPoints(const int _max_points = 0);
-    inline static int   GetPointVal(const int word_length);
-    inline Dictionary* GetDefaultDictionary();
-    inline Board        GetCurrentBoard();
-
-    const static int        PointValues[] = { 0,0,0,100,400,800,1200,1600,2000,2400,2800 };
-    std::set<Solution*>     solution_list;
-    Board                   board;
+    int                             GetMinWordLength();
+    void                            SetMinWordLength(const int _word_len = 3);
+    int                             GetMaxPoints();
+    void                            SetMaxPoints(const int _max_points = 0);
+    int                             GetPointVal(const int word_length = 0);
+    void                            SetDictAsDefault(Dictionary* dict);
+    Dictionary*                     GetDefaultDictionary();
+    std::vector<Dictionary*>        GetDictionaries();
+    void                            SetCurrentSeed(Seed* _seed);
+    Seed*                           GetCurrentSeed();
 
     // Setup Functions
-    Dictionary*         CreateDictionary(const char* fileName);
-    inline void         SetDictAsDefault(Dictionary* dict);
-    inline Dictionary*  GetDefaultDictionary();
-    inline Board        GetCurrentBoard();
-    void                Setup();
-    void                LoadBoard();
-    void                SetupSolver();
-    int                 IsValidSeed(char* potential_seed);
+    void                            GenerateGame(char* s, const size_t len, int seed);
+    Dictionary*                     AddDictionary(const char* fileName);
+    int                             IsValidSeed(char* potential_seed);
+    void                            Setup(char* file_name);
+    void                            SolveCurrentSeed(char* letters);
 }
 
 struct LetterNode
@@ -100,7 +96,7 @@ struct Solution
     Tile*   head;
 
     Solution(Tile* _head);
-    int GetPointValue() { return WordHunt::PointValues[length]; }
+    int GetPointValue() { return WordHunt::GetPointVal(length); }
     char* to_string();
 };
 
@@ -119,24 +115,25 @@ struct Seed
     int             cols;
     unsigned int    seed_value;
     bool            board[15][15];
+    int             time_seconds;
 
     // Valid Formats:
-    //      R##C##>1111111111111111[numericalseed]
+    //      R##C##>1111111111111111[numericalseed]t##
     //      ^row^col^active squares ^actual srand seed
     //
     //      [numericalseed]
-    //      default row = col = 4,
+    //      default row = col = 4, time_seconds = 75
     Seed(unsigned int _seed_value);
     Seed(char* _complete_seed);
     char* to_string();
 };
 
-struct Board
+struct Solver
 {
-    int numRows;
-    int numCows;
-    Seed seed;
+    std::vector<std::vector<char>> grid;
+    std::vector<std::vector<bool>> visited;
+    const int dr[3] = { -1, 0 , 1 };
+    const int dc[3] = { -1, 0 , 1 };
 
-    Board();
-    Board(Seed _seed);
+    Solver(char* letters, Seed* seed);
 };
