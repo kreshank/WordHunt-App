@@ -40,7 +40,10 @@ namespace WordHunt
     Dictionary*                     AddDictionary(const char* fileName);
     int                             IsValidSeed(char* potential_seed);
     void                            Setup(char* file_name);
-    void                            SolveCurrentSeed(char* letters);
+    Solver*                         SolveCurrentSeed(char* letters);
+
+    // Internals
+    void                            SolveStartHere(Solver* solver, Seed* seed, const int row_i, const int col_i, Tile* head, Tile* last, LetterNode* dictionary_pos, const int depth);
 }
 
 struct LetterNode
@@ -132,6 +135,7 @@ struct Solver
 {
     std::vector<std::vector<char>> grid;
     std::vector<std::vector<bool>> visited;
+    std::set<Solution*, SolutionPointerComparator> sol_list;
     const int dr[3] = { -1, 0 , 1 };
     const int dc[3] = { -1, 0 , 1 };
 

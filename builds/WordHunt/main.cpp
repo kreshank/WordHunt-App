@@ -76,8 +76,10 @@ FrameContext* WaitForNextFrameResources();
 LRESULT WINAPI WndProc(HWND hWnd, UINT msg, WPARAM wParam, LPARAM lParam);
 
 // Forward declarations of drawing functions
-bool SolutionItem(Solution* entry, const ImVec2& size, ImU32 solution_color, ImGuiWindowFlags flags = 0);
+bool SolutionItem(Solution* entry, const ImVec2& size, ImU32 solution_color, ImGuiWindowFlags flags = 0, const std::string prefix = "");
 bool DrawSelectionPath(const ImVec2* tile_path_pos, const int word_length, ImU32 line_color, const float line_thickness);
+
+// Forward declarations of static WordHunt variables
 
 
 // Main code
@@ -166,16 +168,17 @@ int main(int, char**)
     // Constants
     const static int    max_row = 15;
     const static int    max_columns = 15;
+    const static int    default_num_rows = 4;
+    const static int    default_num_columns = 4;
     const static int    num_tiles = max_row * max_columns;
     const static ImU32  default_board_color = IM_COL32(236, 205, 155, 255);
 
     // Board State
-    static int          first_used_row = 0;
-    static int          first_used_column = 0;
-    static int          num_rows = 4;
-    static int          num_columns = 4;
+    static int          num_rows = default_num_rows;
+    static int          num_columns = default_num_columns;
     static char         board[max_row][max_columns];
     static bool         active_tiles[max_row][max_columns];
+    static char         letters[256] = "";
 
     // Selection Variables
     static ImVec2       tile_centers[max_row][max_columns]; // Entries are center coordinates (center.x, center.y) of a tile
@@ -206,15 +209,16 @@ int main(int, char**)
 
 
     static auto         start_timer = std::chrono::high_resolution_clock::now();
-    static auto         end_timer = std::chrono::high_resolution_clock::now() + std::chrono::seconds(80);
+    static auto         end_timer = std::chrono::high_resolution_clock::now();
     static auto         timer_delta = std::chrono::duration_cast<std::chrono::seconds>(end_timer - start_timer);
-    static const float  game_length_seconds = 100.0f;
+    static const float  game_length_seconds = 75.0f;
 
-    std::mt19937 rng((unsigned int)__rdtsc()); // random function
-    static int game_phase = WordHuntGamePhase_Selection;
-    static Seed* game_seed;
-    static char seed_string[256] = "";
+    std::mt19937        rng((unsigned int)__rdtsc()); // random function
+    static int          game_phase = WordHuntGamePhase_Selection;
+    static Seed*        game_seed;
+    static char         seed_string[256] = "";
 
+    static Solver* solver;
 
     // Main loop
     bool done = false;
@@ -282,8 +286,6 @@ int main(int, char**)
             ImGui::PushStyleVar(ImGuiStyleVar_WindowMinSize, ImVec2(700, 700));
             ImGui::Begin("Word Hunt", &show_random_game, ImGuiWindowFlags_NoDocking | ImGuiWindowFlags_NoCollapse | ImGuiWindowFlags_NoScrollbar);
 
-            static char letters[256] = "";
-
             // TODO - Create a window or selection system for the board shape / size
             // Replace with a button that starts the game
 
@@ -297,6 +299,8 @@ int main(int, char**)
                 {
                     strncpy_s(seed_buffer, "", 256);
                 }
+
+                std::cout << "301\n";
 
                 static std::string seed_button_text = "Load seed";
                 ImGui::SameLine();
@@ -338,6 +342,7 @@ int main(int, char**)
                 }
 
                 WordHunt::GenerateGame(letters, num_tiles, game_seed->seed_value);
+                WordHunt::SetCurrentSeed(game_seed);
                 game_phase = WordHuntGamePhase_Play;
                 start_timer = std::chrono::high_resolution_clock::now();
                 end_timer = start_timer + std::chrono::seconds(int(game_length_seconds));
@@ -385,6 +390,7 @@ int main(int, char**)
                             memset(activated, 0, sizeof(activated));
                             ImGui::GetForegroundDrawList()->_ResetForNewFrame();
                             ImGui::GetForegroundDrawList()->AddCircleFilled(clock_absolute_center, clock_inner_radius, clock_passed_color);
+                            solver = WordHunt::SolveCurrentSeed(letters);
                         }
 
                         for (int i = 0; i < clock_tick_quantity; i++)
@@ -398,7 +404,7 @@ int main(int, char**)
                     ImGui::EndChild();
                 }
 
-                // DRAW GAME BOARD
+                // DRAW GAME BOARD 
                 const float         TilePadding = 12.0f;
                 const ImVec2        tile_size = ImVec2(100, 100);
 
@@ -518,9 +524,10 @@ int main(int, char**)
                 ImGui::PopStyleColor();
                 ImGui::PopStyleVar();
 
+
+                // WORD DETECTION LOGIC
                 if (game_phase == WordHuntGamePhase_Play)
                 {
-                    // WORD DETECTION LOGIC
                     if (ImGui::IsMouseReleased(ImGuiMouseButton_Left))
                     {
                         previous_word_length = word_length;
@@ -545,7 +552,6 @@ int main(int, char**)
                             discovered.insert(new Solution(head));
                             std::cout << "] is successfully added to [discovered]\n";
                         }
-
                         previous_tile = ImVec2(-1, -1);
                         memset(activated, 0, sizeof(activated));
                     }
@@ -561,9 +567,10 @@ int main(int, char**)
                     ImGui::Text(word);
                 }
 
-                ImVec2 solution_explorer_pos = ImVec2(0, board_pos.y);
-                ImGui::SetCursorPos(solution_explorer_pos);
-                if (ImGui::BeginChild("solution explorer", ImVec2(board_pos.x, board_size.y), true, ImGuiWindowFlags_NoScrollbar | ImGuiWindowFlags_NoMove))
+                // DRAW FOUND WORDS LIST
+                ImVec2 found_words_explorer_pos = ImVec2(0, board_pos.y);
+                ImGui::SetCursorPos(found_words_explorer_pos);
+                if (ImGui::BeginChild("found words", ImVec2(board_pos.x, board_size.y), true, ImGuiWindowFlags_NoScrollbar | ImGuiWindowFlags_NoMove))
                 {
                     ImGui::PushStyleVar(ImGuiStyleVar_ChildRounding, 5.0f);
                     ImGui::Text("WORDS FOUND");
@@ -574,7 +581,7 @@ int main(int, char**)
                     static const ImVec2 solution_size = ImVec2(0, 25);
                     for (Solution* a : discovered)
                     {
-                        if (SolutionItem(a, solution_size, default_board_color, ImGuiWindowFlags_NoMouseInputs) && game_phase == WordHuntGamePhase_Result)
+                        if (SolutionItem(a, solution_size, default_board_color, ImGuiWindowFlags_NoMouseInputs, "found words") && game_phase == WordHuntGamePhase_Result)
                         {
                             word_length = a->length;
                             Tile* head = a->head;
@@ -604,7 +611,56 @@ int main(int, char**)
                 }
                 ImGui::EndChild();
 
-                static ImVec2 seed_text_dimensions = ImGui::CalcTextSize(seed_string);
+                // DRAW SOLUTION LIST
+                if (game_phase == WordHuntGamePhase_Result)
+                {
+                    ImVec2 solution_explorer_pos = ImVec2(board_pos.x + board_size.x, board_pos.y);
+                    ImGui::SetCursorPos(solution_explorer_pos);
+                    if (ImGui::BeginChild("solution", ImVec2(board_pos.x, board_size.y), true, ImGuiWindowFlags_NoScrollbar | ImGuiWindowFlags_NoMove))
+                    {
+                        ImGui::PushStyleVar(ImGuiStyleVar_ChildRounding, 5.0f);
+                        ImGui::Text("POSSIBLE WORDS");
+                        ImGui::PushStyleColor(ImGuiCol_Text, IM_COL32(0, 0, 0, 255));
+                        ImGui::PushFont(io.Fonts->Fonts[0]);
+
+
+                        static const ImVec2 solution_size = ImVec2(0, 25);
+                        for (Solution* a : solver->sol_list)
+                        {
+                            if (SolutionItem(a, solution_size, default_board_color, ImGuiWindowFlags_NoMouseInputs, "solution"))
+                            {
+                                word_length = a->length;
+                                Tile* head = a->head;
+
+                                int i = 0;
+                                while (head)
+                                {
+                                    tile_path_pos[i++] = tile_centers[head->x][head->y];
+                                    activated[head->x][head->y] = true;
+                                    head = head->next;
+                                }
+                                line_color = pale_white;
+                                DrawSelectionPath(tile_path_pos, word_length, line_color, line_thickness);
+
+                                head = a->head;
+                                i = 0;
+                                while (head)
+                                {
+                                    activated[head->x][head->y] = false;
+                                    head = head->next;
+                                }
+                                word_length = 0;
+                            }
+                        }
+                        ImGui::PopFont();
+                        ImGui::PopStyleColor();
+                        ImGui::PopStyleVar();
+                    }
+                    ImGui::EndChild();
+                }
+
+                // DRAW SEED
+                ImVec2 seed_text_dimensions = ImGui::CalcTextSize(seed_string);
                 ImGui::SetCursorPos(ImGui::GetWindowSize() - seed_text_dimensions - ImVec2(10, 10));
                 ImGui::Text(seed_string);
 
@@ -1013,9 +1069,9 @@ LRESULT WINAPI WndProc(HWND hWnd, UINT msg, WPARAM wParam, LPARAM lParam)
 }
 
 // Returns true if solution item hovered
-bool SolutionItem(Solution* entry, const ImVec2& size, ImU32 solution_color, ImGuiWindowFlags flags)
+bool SolutionItem(Solution* entry, const ImVec2& size, ImU32 solution_color, ImGuiWindowFlags flags, const std::string prefix)
 {
-    std::string solution_id = entry->to_string();
+    std::string solution_id = prefix + " : " + entry->to_string();
     solution_id += " tile";
     bool is_hovered = false;
     if (ImGui::BeginChild(solution_id.data(), size, false, flags))
@@ -1028,7 +1084,7 @@ bool SolutionItem(Solution* entry, const ImVec2& size, ImU32 solution_color, ImG
         while (point_value && i)
         {
             buf[i--] = "0123456789"[point_value % 10];
-            point_value /= 10;
+            point_value /= 10;  
         }
 
         ImVec2 point_dimensions = ImGui::CalcTextSize(&buf[i + 1]);

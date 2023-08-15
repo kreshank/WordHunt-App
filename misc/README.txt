@@ -21,3 +21,6 @@ misc/single_file/
   We use this to validate compiling all *.cpp files in a same compilation unit.
   Users of that technique (also called "Unity builds") can generally provide this themselves,
   so we don't really recommend you use this in your projects.
+
+misc/files/
+  External file go here

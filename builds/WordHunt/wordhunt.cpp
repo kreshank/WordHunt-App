@@ -72,6 +72,7 @@ Solution::Solution(Tile* _head)
 {
     head = _head;
     Tile* temp = head;
+
     word = new char[16];
     length = 0;
     while (temp)
@@ -251,10 +252,11 @@ Solver::Solver(char* letters, Seed* seed)
         grid.push_back(std::vector<char>());
         for (int col = 0; col < seed->cols; col++)
         {
-            grid[row].push_back(letters[row * seed->rows + col]);
+            grid[row].push_back(letters[(row * seed->rows + col) * 2]);
         }
     }
     visited = std::vector<std::vector<bool>>(seed->rows, std::vector<bool>(seed->cols, false));
+    sol_list = std::set<Solution*, SolutionPointerComparator>();
 };
 
 //-------------------------------------------------------------------------
@@ -267,8 +269,7 @@ static std::vector<Dictionary*> dictionaries;
 static int                      min_word_length;
 static int                      max_points;
 static const int                point_values[] = { 0,0,0,100,400,800,1200,1600,2000,2400,2800 };
-static std::set<Solution*>      solution_list;
-static Seed*                    seed;
+static Seed*                    current_seed;
 
 // Variable Getters and Setters
 int WordHunt::GetMinWordLength()
@@ -313,18 +314,18 @@ std::vector<Dictionary*> WordHunt::GetDictionaries()
 
 void WordHunt::SetCurrentSeed(Seed* _seed)
 {
-    seed = _seed;
+    current_seed = _seed;
 }
 
 Seed* WordHunt::GetCurrentSeed()
 {
-    return seed;
+    return current_seed;
 }
 
 // Setup function
-void WordHunt::GenerateGame(char* s, const size_t len, int seed)
+void WordHunt::GenerateGame(char* s, const size_t len, int _seed)
 {
-    std::mt19937 rng(seed);
+    std::mt19937 rng(_seed);
     const static char* characterSet = "EEEEEEEEEEEEAAAAAAAAAIIIIIIIIIOOOOOOOONNNNNNRRRRRRTTTTTTLLLLSSSSUUUUDDDDGGGBBCCMMPPFFHHVVWWYYKJXQZ";
     for (size_t i = 0; i < len * 2; i += 2) {
         s[i] = characterSet[std::uniform_int_distribution<int>(0, 97)(rng)];
@@ -473,7 +474,75 @@ static std::set<Solution*>      solution_list;
 static Seed*                    seed;
 */
 
-void WordHunt::SolveCurrentSeed(char* letters)
+Solver* WordHunt::SolveCurrentSeed(char* letters)
 {
-    Solver* solve = new Solver(letters, WordHunt::GetCurrentSeed());
+    Solver* solver = new Solver(letters, WordHunt::GetCurrentSeed());
+    Seed* _current_seed = WordHunt::GetCurrentSeed();
+
+    for (int i = 0; i < _current_seed->rows; i++)
+    {
+        for (int j = 0; j < _current_seed->cols; j++)
+        {
+            if (!_current_seed->board[i][j])
+            {
+                continue;
+            }
+            char letter = solver->grid[i][j];
+            Tile* head = new Tile(i, j, letter);
+            WordHunt::SolveStartHere(solver, _current_seed, i, j, head, head, GetDefaultDictionary()->head->children[letter - 'A'], 1);
+        }
+    }
+    return solver;
+}                                                               
+
+void WordHunt::SolveStartHere(Solver* solver, Seed* seed, const int cur_row, const int cur_col, Tile* head, Tile* prev, LetterNode* dictionary_pos, const int depth)
+{
+    solver->visited[cur_row][cur_col] = true;
+
+    if (dictionary_pos->end_of_word && depth >= WordHunt::GetMinWordLength())
+    {
+        Tile* new_head = new Tile(head->x, head->y, head->val);
+        Tile* temp = head->next, *new_temp = new_head;
+
+        while (temp)
+        {
+            new_temp->next = new Tile(temp->x, temp->y, temp->val);
+            new_temp = new_temp->next;
+            temp = temp->next;
+        }
+
+        solver->sol_list.insert(new Solution(new_head));
+    }
+
+    static const int r_size = sizeof(solver->dr) / sizeof(solver->dr[0]);
+    static const int c_size = sizeof(solver->dc) / sizeof(solver->dc[0]);
+    for (int i = 0; i < r_size; i++)
+    {
+        for (int j = 0; j < c_size; j++)
+        {
+            int new_row = cur_row + solver->dr[i];
+            int new_col = cur_col + solver->dc[j];
+            if (new_row == cur_row && new_col == cur_col)
+            {
+                continue;
+            }
+            if (0 > new_row || new_row >= seed->rows || 0 > new_col || new_col >= seed->cols || !seed->board[new_row][new_col])
+            {
+                continue;
+            }
+            if (solver->visited[new_row][new_col])
+            {
+                continue;
+            }
+
+            char letter = solver->grid[new_row][new_col];
+            if (dictionary_pos->hasChildren && dictionary_pos->isChild[letter - 'A'])
+            {
+                prev->next = new Tile(new_row, new_col, letter);
+                WordHunt::SolveStartHere(solver, seed, new_row, new_col, head, prev->next, dictionary_pos->children[letter - 'A'], depth + 1);
+            }
+        }
+    }
+
+    solver->visited[cur_row][cur_col] = false;
 }
