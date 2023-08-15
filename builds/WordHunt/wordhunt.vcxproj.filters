@@ -53,9 +53,7 @@
     <None Include="..\..\misc\debuggers\imgui.natstepfilter">
       <Filter>imgui</Filter>
     </None>
-    <None Include="..\README.txt">
-      <Filter>source</Filter>
-    </None>
+    <None Include="..\..\README.md" />
   </ItemGroup>
   <ItemGroup>
     <Filter Include="imgui">
