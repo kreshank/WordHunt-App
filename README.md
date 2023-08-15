@@ -10,7 +10,7 @@ This is a mock iOS Game Pigeon WordHunt game generator, allowing for custom game
 
 ## Description
 
-This app can be used to create random word-search boards and solve existing ones with a simple and intuitive user interface.
+This app should be capable of creating random (and custom) WordHunt boards, allowing for millions of unique games. There will soon be a more beautiful and intuitive user interface that allows for smooth and enjoyable gameplay. There will soon be a featured custom board solver, local saves, and a more portable system.
 
 ### Features
 
@@ -19,14 +19,14 @@ This app can be used to create random word-search boards and solve existing ones
 
 ### Built with
 
-- 100% C++
+- C++
 - Dear ImGui
 
 ## Getting started
 
 ### Prerequisites
 
-Windows 10, 11 and DirectX12.
+Windows 10 or 11 and DirectX12.
 
 ## Back matter
 
@@ -41,7 +41,7 @@ Thanks to all who helped inspire this template.
 ### To-do
 
 - [ ] Board selector
-- [ ] Game selector
+- [ ] Game option selector
 - [ ] Dictionary selector
 - [ ] Default settings adjustor (including memory)
 - [ ] Local storage
