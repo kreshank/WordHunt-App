@@ -300,8 +300,6 @@ int main(int, char**)
                     strncpy_s(seed_buffer, "", 256);
                 }
 
-                std::cout << "301\n";
-
                 static std::string seed_button_text = "Load seed";
                 ImGui::SameLine();
 
