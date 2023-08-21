@@ -159,7 +159,9 @@
     <ClInclude Include="..\..\imgui\imconfig.h" />
     <ClInclude Include="..\..\imgui\imgui.h" />
     <ClInclude Include="..\..\imgui\imgui_internal.h" />
+    <ClInclude Include="macros.h" />
     <ClInclude Include="wordhunt.h" />
+    <ClInclude Include="wordhunt_styles.h" />
   </ItemGroup>
   <ItemGroup>
     <ClCompile Include="..\..\backends\imgui_impl_dx12.cpp" />
@@ -171,6 +173,7 @@
     <ClCompile Include="..\..\imgui\imgui_widgets.cpp" />
     <ClCompile Include="main.cpp" />
     <ClCompile Include="wordhunt.cpp" />
+    <ClCompile Include="wordhunt_styles.cpp" />
   </ItemGroup>
   <ItemGroup>
     <None Include="..\..\misc\debuggers\imgui.natstepfilter" />

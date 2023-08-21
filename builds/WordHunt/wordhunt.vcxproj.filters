@@ -19,14 +19,17 @@
     <ClCompile Include="main.cpp">
       <Filter>source</Filter>
     </ClCompile>
-    <ClCompile Include="wordhunt.cpp">
-      <Filter>source</Filter>
-    </ClCompile>
     <ClCompile Include="..\..\backends\imgui_impl_dx12.cpp">
       <Filter>source</Filter>
     </ClCompile>
     <ClCompile Include="..\..\backends\imgui_impl_win32.cpp">
       <Filter>source</Filter>
+    </ClCompile>
+    <ClCompile Include="wordhunt.cpp">
+      <Filter>wordhunt</Filter>
+    </ClCompile>
+    <ClCompile Include="wordhunt_styles.cpp">
+      <Filter>wordhunt</Filter>
     </ClCompile>
   </ItemGroup>
   <ItemGroup>
@@ -39,14 +42,20 @@
     <ClInclude Include="..\..\imgui\imgui_internal.h">
       <Filter>imgui</Filter>
     </ClInclude>
-    <ClInclude Include="wordhunt.h">
-      <Filter>source</Filter>
-    </ClInclude>
     <ClInclude Include="..\..\backends\imgui_impl_win32.h">
       <Filter>source</Filter>
     </ClInclude>
     <ClInclude Include="..\..\backends\imgui_impl_dx12.h">
       <Filter>source</Filter>
+    </ClInclude>
+    <ClInclude Include="macros.h">
+      <Filter>source</Filter>
+    </ClInclude>
+    <ClInclude Include="wordhunt.h">
+      <Filter>wordhunt</Filter>
+    </ClInclude>
+    <ClInclude Include="wordhunt_styles.h">
+      <Filter>wordhunt</Filter>
     </ClInclude>
   </ItemGroup>
   <ItemGroup>
@@ -61,6 +70,9 @@
     </Filter>
     <Filter Include="source">
       <UniqueIdentifier>{54dd0ecc-66d3-4613-8717-2cdb2daaf53f}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="wordhunt">
+      <UniqueIdentifier>{61d37992-c2e5-43c8-beeb-f80ffbe62dc9}</UniqueIdentifier>
     </Filter>
   </ItemGroup>
   <ItemGroup>
