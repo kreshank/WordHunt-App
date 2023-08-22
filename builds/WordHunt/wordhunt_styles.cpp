@@ -13,60 +13,71 @@
 // [SECTION] SETUP
 //-------------------------------------------------------------------------
 
-WHStyle* default;
-WHStyle* current;
+WHStyle* default = new WHStyle();
+WHStyle* current = default;
 WHStyle* config;
 
 WHStyle::WHStyle()
 {
-    // Button Graphics
-    ButtonTextSize = 20.0f;
-    ButtonRounding = 15.0f;
-    ButtonPadding;
-    ButtonBackgroundCol;
-    ButtonTextCol;
-    ButtonBorderCol;
+    // Theme
+    ThemeCol_Main = IM_COL32(124, 171, 126, 255);
+    ThemeCol_Secondary = IM_COL32(236, 205, 155, 255);
+    ThemeCol_Tertiary = IM_COL32(141, 233, 133, 255);
+
+    // Window
+    WindowBackgroundCol = IM_COL32(127, 150, 118, 255);
+    ThemeFontFamily = NotoSerifSemiBold;
+    WindowFlags_Default = ImGuiWindowFlags_NoDocking | ImGuiWindowFlags_NoCollapse | ImGuiWindowFlags_NoDecoration | ImGuiWindowFlags_NoResize;
+
+    // Title
+    TitleTextSize = FontSize_64px;
+    TitleFontFamily = OpenSansBold;
+    TitleCol = IM_COL32(220, 220, 220, 100);
 
     // Text Graphics
-    TextSize;
-    TextCol;
+    TextSize = FontSize_20px;
+    TextCol = IM_COL32(0, 0, 0, 255);
 
-    // Theme Graphics
-    WindowBackgroundCol;
-    MainCol;
-    SecondaryCol;
-    ComplimentaryCol;
+    // Button
+    ButtonTextSize = FontSize_24px;
+    ButtonRounding = 15.0f;
+    ButtonPadding = ImVec2(30, 10);
+    ButtonBackgroundCol = IM_COL32(241, 207, 145, 255);
+    ButtonBackgroundCol_Active = IM_COL32(135, 198, 200, 255);
+    ButtonBackgroundCol_Hovered = IM_COL32(141, 233, 133, 255); // Make a transition
+    ButtonTextCol = IM_COL32(0, 0, 0, 255);
+    ButtonBorderCol = IM_COL32(95, 158, 160, 255);
 
     // Clock Graphics
-    ClockCol_Rim;
-    ClockCol_Body;
-    ClockCol_Tick;
-    ClockCol_Elapsed;
+    ClockCol_Rim = IM_COL32(0, 0, 0, 255);
+    ClockCol_Body = IM_COL32(255, 255, 255, 255);
+    ClockCol_Tick = IM_COL32(0, 0, 0, 255);
+    ClockCol_Elapsed = IM_COL32(180, 0, 0, 120);
 
     // Tile Graphics
     TileSpacing;
-    TilePadding;
-    TileRounding;
-    TileTextSize;
-    TileSize;
-    TileBackgroundCol_Default;
-    TileBackgroundCol_Valid;
-    TileBackgroundCol_Invalid;
-    TileBackgroundCol_Repeated;
-    TileBackgroundCol_Unselected;
-    TileTextCol;
+    TilePadding = 12.0f;
+    TileRounding = 15.0f;
+    TileTextSize = FontSize_80px;
+    TileSize = ImVec2(100, 100);
+    TileBackgroundCol_Default = IM_COL32(236, 205, 155, 255);
+    TileBackgroundCol_Valid = IM_COL32(141, 233, 133, 225);
+    TileBackgroundCol_Invalid = IM_COL32(250, 250, 250, 255);
+    TileBackgroundCol_Repeated = IM_COL32(241, 243, 119, 225);
+    TileBackgroundCol_Unselected = IM_COL32(236, 205, 155, 255);
+    TileTextCol = IM_COL32(0, 0, 0, 255);
 
     // Selection Graphics
-    SelectedPath_Thickness;
-    SelectedPathCol_Default;
-    SelectedPathCol_Valid;
-    SelectedPathCol_Invalid;
-    SelectedPathCol_Repeated;
+    SelectedPath_Thickness = 7.5f;
+    SelectedPathCol_Default = IM_COL32(250, 250, 250, 255);
+    SelectedPathCol_Valid = IM_COL32(250, 250, 250, 255);
+    SelectedPathCol_Invalid = IM_COL32(250, 160, 160, 255);
+    SelectedPathCol_Repeated = IM_COL32(250, 250, 250, 255);
 
     // Solution Graphics
-    SolutionTitleSize;
-    SolutionTitleCol;
-    SolutionItemRounding;
+    SolutionTitleSize = FontSize_30px;
+    SolutionTitleCol = IM_COL32(0, 0, 0, 255);
+    SolutionItemRounding = 5.0f;
     SolutionItemCol_Background;
     SolutionItemCol_Text;
     SolutionExplorerCol;
@@ -78,9 +89,6 @@ WHStyle::WHStyle()
 void WHGui::LoadFonts()
 {
     ImGuiIO& io = ImGui::GetIO(); (void)io;
-
-    io.Fonts->AddFontFromFileTTF("../../misc/fonts/NotoSerif-Regular.ttf", 20.0f);
-    io.Fonts->AddFontFromFileTTF("../../misc/fonts/NotoSerif-SemiBold.ttf", 80.0f);
 
     // NotoSerif-Black
     io.Fonts->AddFontFromFileTTF("../../misc/fonts/NotoSerif-Black.ttf", 16.0f);
@@ -290,7 +298,7 @@ void WHGui::LoadFonts()
 
 WHStyle* WHGui::GetWHStyle()
 {
-    return nullptr;
+    return current;
 }
 
 void WHGui::ResetToDefaultWHStyle()
@@ -300,49 +308,79 @@ void WHGui::ResetToDefaultWHStyle()
 
 WHStyle* WHGui::LoadStyleFromFile(const char* filename)
 {
+    return config;
+}
 
+ImFont* WHGui::FontRetrieve(FontFamily ff, FontSize fs)
+{
+    ImGuiIO& io = ImGui::GetIO();
+    return io.Fonts->Fonts[ff * 10 + fs];
 }
 
 //-------------------------------------------------------------------------
 // [SECTION] STYLE MODIFIERS
 //-------------------------------------------------------------------------
 
-void PushButtonStyle()
+
+void WHGui::PushTitleStyle()
 {
     ImGuiIO io = ImGui::GetIO();
     WHStyle* styler = WHGui::GetWHStyle();
-    ImFont* font = io.Fonts->Fonts[styler->GlobalFont * 10 + styler->ButtonTextSize];
-    ImGui::PushFont(font);
+
+    ImGui::PushFont(WHGui::FontRetrieve(styler->TitleFontFamily, styler->TitleTextSize));
+    ImGui::PushStyleColor(ImGuiCol_Text, styler->TitleCol);
+}
+
+void WHGui::PopTitleStyle()
+{
+    ImGui::PopFont();
+    ImGui::PopStyleColor();
+}
+
+void WHGui::PushButtonStyle()
+{
+    ImGuiIO io = ImGui::GetIO();
+    WHStyle* styler = WHGui::GetWHStyle();
+
+    ImGui::PushFont(WHGui::FontRetrieve(styler->ThemeFontFamily, styler->ButtonTextSize));
 
     ImGui::PushStyleVar(ImGuiStyleVar_FrameRounding, styler->ButtonRounding);
     ImGui::PushStyleVar(ImGuiStyleVar_FramePadding, styler->ButtonPadding);
-    ImGui::PushStyleColor(ImGuiCol_FrameBg, styler->ButtonBackgroundCol);
-    ImGui::PushStyleColor(ImGuiCol_FrameBgActive, styler->ButtonBackgroundCol_Active);
-    ImGui::PushStyleColor(ImGuiCol_FrameBgHovered, styler->ButtonBackgroundCol_Hovered);
+
+    ImGui::PushStyleColor(ImGuiCol_Button, styler->ButtonBackgroundCol);
+    ImGui::PushStyleColor(ImGuiCol_ButtonActive, styler->ButtonBackgroundCol_Active);
+    ImGui::PushStyleColor(ImGuiCol_ButtonHovered, styler->ButtonBackgroundCol_Hovered);
     ImGui::PushStyleColor(ImGuiCol_Text, styler->ButtonTextCol);
     ImGui::PushStyleColor(ImGuiCol_Border, styler->ButtonBorderCol);
 }
 
-void PopButtonStyle()
+void WHGui::PopButtonStyle()
 {
     ImGui::PopFont();
-    ImGui::PopStyleVar();
-    ImGui::PopStyleVar();
-    ImGui::PopStyleColor();
-    ImGui::PopStyleColor();
-    ImGui::PopStyleColor();
-    ImGui::PopStyleColor();
-    ImGui::PopStyleColor();
+    ImGui::PopStyleVar(2);
+    ImGui::PopStyleColor(5);
 }
 
-void PushTileStyle()
+void WHGui::PushTileStyle()
 {
 
 }
 
-void PopTileStyle()
+void WHGui::PopTileStyle()
 {
 
+}
+
+void WHGui::PushWindowStyle()
+{
+    WHStyle* styler = WHGui::GetWHStyle();
+
+    ImGui::PushStyleColor(ImGuiCol_WindowBg, styler->WindowBackgroundCol);
+}
+
+void WHGui::PopWindowStyler()
+{
+    ImGui::PopStyleColor();
 }
 
 //-------------------------------------------------------------------------
@@ -389,4 +427,12 @@ bool WHGui::SolutionItem(Solution* entry, const ImVec2& size, ImU32 solution_col
     is_hovered = ImGui::IsWindowHovered(ImGuiHoveredFlags_ChildWindows);
     ImGui::EndChild();
     return is_hovered;
+}
+
+bool WHGui::Button(const char* label, const ImVec2& size)
+{
+    WHGui::PushButtonStyle();
+    bool ret_val = ImGui::Button(label, size);
+    WHGui::PopButtonStyle();
+    return ret_val;
 }

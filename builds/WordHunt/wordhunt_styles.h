@@ -16,7 +16,7 @@ enum TileState_
     TileState_Repeated
 };
 
-enum FontFamily
+enum FontFamily_
 {
     NotoSerifBlack,
     NotoSerifBold,
@@ -58,20 +58,47 @@ namespace WHGui
     void ResetToDefaultWHStyle();
     WHStyle* LoadStyleFromFile(const char* filename);
     void LoadFonts();
+    ImFont* FontRetrieve(FontFamily ff, FontSize fs);
 
     // Style Modifiers
+    void PushTitleStyle();
+    void PopTitleStyle();
     void PushButtonStyle();
     void PopButtonStyle();
     void PushTileStyle();
     void PopTileStyle();
+    void PushWindowStyle();
+    void PopWindowStyler();
 
     // Custom Objects
     bool SolutionItem(Solution* entry, const ImVec2& size, ImU32 solution_color, ImGuiWindowFlags flags = 0, const std::string prefix = "");
+    bool Clock(ImVec2 &size, bool border, ImGuiWindowFlags flags = 0);
+    bool Button(const char* label, const ImVec2& size = ImVec2(0, 0));
 }
 
 struct WHStyle
 {
-    // Button Graphics
+    // Theme
+    ImU32           ThemeCol_Main;
+    ImU32           ThemeCol_Secondary;
+    ImU32           ThemeCol_Tertiary;
+    FontFamily      ThemeFontFamily;
+
+    // Window
+    ImU32           WindowBackgroundCol;
+    float           WindowRounding;
+    ImGuiWindowFlags WindowFlags_Default;
+
+    // Title
+    FontSize        TitleTextSize;
+    FontFamily      TitleFontFamily;
+    ImU32           TitleCol;
+
+    // Text Graphics
+    FontSize        TextSize;
+    ImU32           TextCol;
+
+    // Button
     FontSize        ButtonTextSize;
     float           ButtonRounding;
     ImVec2          ButtonPadding;
@@ -81,18 +108,11 @@ struct WHStyle
     ImU32           ButtonTextCol;
     ImU32           ButtonBorderCol;
 
-    // Text Graphics
-    FontSize        TextSize;
-    ImU32           TextCol;
-
-    // Theme Graphics
-    ImU32           WindowBackgroundCol;
-    ImU32           MainCol;
-    ImU32           SecondaryCol;
-    ImU32           ComplimentaryCol;
-    FontFamily      GlobalFont;
-
     // Clock Graphics
+    ImVec2 ClockSize;
+    float ClockRadius_Inner;
+    float ClockRadius_Outer;
+    float ClockRimWidth;
     ImU32           ClockCol_Rim;
     ImU32           ClockCol_Body;
     ImU32           ClockCol_Tick;
