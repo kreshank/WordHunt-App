@@ -55,7 +55,7 @@ WHStyle::WHStyle()
     ClockCol_Elapsed = IM_COL32(180, 0, 0, 120);
 
     // Tile Graphics
-    TileSpacing;
+    TileSpacing;// = ImGui::GetStyle().ItemSpacing.x;
     TilePadding = 12.0f;
     TileRounding = 15.0f;
     TileTextSize = FontSize_80px;
@@ -78,11 +78,11 @@ WHStyle::WHStyle()
     SolutionTitleSize = FontSize_30px;
     SolutionTitleCol = IM_COL32(0, 0, 0, 255);
     SolutionItemRounding = 5.0f;
-    SolutionItemCol_Background;
-    SolutionItemCol_Text;
+    SolutionItemCol_Background = IM_COL32(255, 255, 255, 255);
+    SolutionItemCol_Text = IM_COL32(0, 0, 0, 255);
     SolutionExplorerCol;
-    SolutionExplorerMaxSize;
-    SolutionScoreSize;
+    SolutionExplorerMaxSize = ImVec2(300,700);
+    SolutionScoreSize = FontSize_36px;
     SolutionScoreCol;
 }
 
