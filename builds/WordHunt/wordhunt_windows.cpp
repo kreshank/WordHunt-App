@@ -165,10 +165,68 @@ void ShowSeedSelector(bool* p_open)
 
 void ShowSolver(bool* p_open)
 {
+    FullScreenNextWindow();
+    WHGui::PushWindowStyle();
 
+    ImGui::Begin("Main Game Window", p_open, WHGui::GetWHStyle()->WindowFlags_Default);
+    static char buf[128] = " test ";
+    ImGui::InputText("label 1", buf, 10);
+
+    const static int max = 10;
+
+    static int numRows = 4;
+    static int numCols = 4;
+
+    // Variable size
+    {
+        // Row Changing
+        if (ImGui::Button("Increment Rows") && numRows != max)
+            numRows++;
+        ImGui::SameLine();
+        if (ImGui::Button("Decrement Rows") && numRows != 0)
+            numRows--;
+
+        if (ImGui::Button("Increment Col") && numCols != max)
+            numCols++;
+        ImGui::SameLine();
+        if (ImGui::Button("Decrement Col") && numCols != 0)
+            numCols--;
+
+        static char data[200] = "";
+
+        if (ImGui::BeginTable("Game Board", numCols, ImGuiTableFlags_Borders | ImGuiTableFlags_RowBg))
+        {
+            for (int row = 0; row < numRows; row++)
+            {
+                ImGui::TableNextRow();
+                for (int col = 0; col < numCols; col++)
+                {
+                    ImGui::TableSetColumnIndex(col);
+                    ImU32 cell_bg_color = IM_COL32(236, 205, 155, 255);
+                    ImGui::TableSetBgColor(ImGuiTableBgTarget_CellBg, cell_bg_color);
+
+                    ImGuiInputTextFlags textFlags = ImGuiInputTextFlags_CharsNoBlank | ImGuiInputTextFlags_CharsUppercase | ImGuiInputTextFlags_AlwaysOverwrite | ImGuiInputTextFlags_NoHorizontalScroll;
+
+
+                    char randomLabel[10] = "##RTile  ";
+                    randomLabel[7] = char(row + '1');
+                    randomLabel[8] = char(col + '1');
+
+                    ImGui::InputText(randomLabel, &data[(col * 10 + row) * 2], 2, textFlags);
+
+                    if (ImGui::IsItemHovered())
+                        ImGui::TableSetBgColor(ImGuiTableBgTarget_CellBg, IM_COL32(190, 229, 176, 255));
+                }
+            }
+            ImGui::EndTable();
+        }
+
+    }
+    ImGui::End();
+    WHGui::PopWindowStyle();
 }
 
 void ShowSettings(bool* p_open)
 {
-
+    
 }
