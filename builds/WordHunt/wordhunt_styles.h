@@ -145,7 +145,7 @@ struct WHStyle
     ImU32           SolutionItemCol_Background;
     ImU32           SolutionItemCol_Text;
     ImU32           SolutionExplorerCol;
-    float           SolutionExplorerMaxSize;
+    ImVec2          SolutionExplorerMaxSize;
     float           SolutionScoreSize;
     ImU32           SolutionScoreCol;
 
