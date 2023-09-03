@@ -44,6 +44,7 @@ namespace WordHunt
 
     // Internals
     void                            SolveStartHere(Solver* solver, Seed* seed, const int row_i, const int col_i, Tile* head, Tile* last, LetterNode* dictionary_pos, const int depth);
+    void                            WordHuntMenu(bool* p_open);
 }
 
 struct LetterNode

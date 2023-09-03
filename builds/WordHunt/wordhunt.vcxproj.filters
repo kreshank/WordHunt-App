@@ -31,6 +31,9 @@
     <ClCompile Include="wordhunt_styles.cpp">
       <Filter>wordhunt</Filter>
     </ClCompile>
+    <ClCompile Include="wordhunt_windows.cpp">
+      <Filter>wordhunt</Filter>
+    </ClCompile>
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="..\..\imgui\imconfig.h">

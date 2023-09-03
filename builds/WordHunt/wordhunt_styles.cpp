@@ -27,7 +27,7 @@ WHStyle::WHStyle()
     // Window
     WindowBackgroundCol = IM_COL32(127, 150, 118, 255);
     ThemeFontFamily = NotoSerifSemiBold;
-    WindowFlags_Default = ImGuiWindowFlags_NoDocking | ImGuiWindowFlags_NoCollapse | ImGuiWindowFlags_NoDecoration | ImGuiWindowFlags_NoResize;
+    WindowFlags_Default = ImGuiWindowFlags_NoDocking | ImGuiWindowFlags_NoCollapse | ImGuiWindowFlags_NoDecoration | ImGuiWindowFlags_NoResize | ImGuiTableFlags_NoSavedSettings;
 
     // Title
     TitleTextSize = FontSize_64px;
@@ -378,7 +378,7 @@ void WHGui::PushWindowStyle()
     ImGui::PushStyleColor(ImGuiCol_WindowBg, styler->WindowBackgroundCol);
 }
 
-void WHGui::PopWindowStyler()
+void WHGui::PopWindowStyle()
 {
     ImGui::PopStyleColor();
 }

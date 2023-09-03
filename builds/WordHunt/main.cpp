@@ -101,6 +101,7 @@ int main(int, char**)
     io.ConfigFlags |= ImGuiConfigFlags_NavEnableKeyboard;     // Enable Keyboard Controls
     io.ConfigFlags |= ImGuiConfigFlags_NavEnableGamepad;      // Enable Gamepad Controls
     io.ConfigFlags |= ImGuiConfigFlags_ViewportsEnable;       // Enable Multi-Viewport / Platform Windows
+
     //io.ConfigViewportsNoAutoMerge = true;
     //io.ConfigViewportsNoTaskBarIcon = true;
 
@@ -239,44 +240,45 @@ int main(int, char**)
         main_game_window_flags |= ImGuiWindowFlags_NoCollapse;
         main_game_window_flags |= ImGuiWindowFlags_NoBringToFrontOnFocus;
 
-        if (show_main_menu)
-        {
-            ImGui::PushStyleColor(ImGuiCol_WindowBg, ImU32(IM_COL32(30, 144, 255, 255)));
-            ImGui::SetNextWindowPos(viewport->WorkPos);
-            ImGui::SetNextWindowSize(viewport->WorkSize);
-            ImGui::Begin("Main Menu", &show_main_menu, main_game_window_flags);
+        WordHunt::WordHuntMenu(&show_main_menu);
+        //if (show_main_menu)
+        //{
+        //    ImGui::PushStyleColor(ImGuiCol_WindowBg, ImU32(IM_COL32(30, 144, 255, 255)));
+        //    ImGui::SetNextWindowPos(viewport->WorkPos);
+        //    ImGui::SetNextWindowSize(viewport->WorkSize);
+        //    ImGui::Begin("Main Menu", &show_main_menu, main_game_window_flags);
 
-            WHGui::PushTitleStyle();
-            CENTERED_CONTROL(ImGui::Text("WORDHUNT"));
-            WHGui::PopTitleStyle();
+        //    WHGui::PushTitleStyle();
+        //    CENTERED_CONTROL(ImGui::Text("WORDHUNT"));
+        //    WHGui::PopTitleStyle();
 
-            if (CENTERED_CONTROL(WHGui::Button("Play!")))
-            {
-                ImGui::SetWindowFocus();
-                show_random_game = true;
-                game_phase = WordHuntGamePhase_Selection;
-                game_seed = new Seed(std::uniform_int_distribution<int>(0, INT_MAX)(rng));
-                discovered.clear();
-                found_words.clear();
-            }
-            if (CENTERED_CONTROL(WHGui::Button("Solver")))
-            {
-                ImGui::SetWindowFocus();
-                show_custom_game = true;
-            }
-            if (CENTERED_CONTROL(WHGui::Button("Settings")))
-            {
-                // TODO
-            }
-            if (CENTERED_CONTROL(WHGui::Button("Show demo/debug window")))
-            {
-                ImGui::SetWindowFocus();
-                show_demo_window = true;
-            }
+        //    if (CENTERED_CONTROL(WHGui::Button("Play!")))
+        //    {
+        //        ImGui::SetWindowFocus();
+        //        show_random_game = true;
+        //        game_phase = WordHuntGamePhase_Selection;
+        //        game_seed = new Seed(std::uniform_int_distribution<int>(0, INT_MAX)(rng));
+        //        discovered.clear();
+        //        found_words.clear();
+        //    }
+        //    if (CENTERED_CONTROL(WHGui::Button("Solver")))
+        //    {
+        //        ImGui::SetWindowFocus();
+        //        show_custom_game = true;
+        //    }
+        //    if (CENTERED_CONTROL(WHGui::Button("Settings")))
+        //    {
+        //        // TODO
+        //    }
+        //    if (CENTERED_CONTROL(WHGui::Button("Show demo/debug window")))
+        //    {
+        //        ImGui::SetWindowFocus();
+        //        show_demo_window = true;
+        //    }
 
-            ImGui::End();
-            ImGui::PopStyleColor();
-        }
+        //    ImGui::End();
+        //    ImGui::PopStyleColor();
+        //}
 
         if (show_random_game)
         {
@@ -693,7 +695,7 @@ int main(int, char**)
                 }
             }
             ImGui::End();
-            WHGui::PopWindowStyler();
+            WHGui::PopWindowStyle();
         }
 
         if (show_custom_game)
