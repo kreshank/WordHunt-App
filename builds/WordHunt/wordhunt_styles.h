@@ -68,7 +68,7 @@ namespace WHGui
     void PushTileStyle();
     void PopTileStyle();
     void PushWindowStyle();
-    void PopWindowStyler();
+    void PopWindowStyle();
 
     // Custom Objects
     bool SolutionItem(Solution* entry, const ImVec2& size, ImU32 solution_color, ImGuiWindowFlags flags = 0, const std::string prefix = "");
