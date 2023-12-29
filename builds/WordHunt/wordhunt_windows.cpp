@@ -23,6 +23,15 @@ static void ShowSeedSelector(bool* p_open);
 static void ShowSolver(bool* p_open);
 static void ShowSettings(bool* p_open);
 
+// Global Vars
+static bool show_game_selector = false;
+static bool show_solver = false;
+static bool show_settings = false;
+static bool show_imgui_demo = false;
+static bool show_game_screen = false;
+static bool show_game_creator = false;
+static bool show_seed_selector = false;
+
 // Helpers
 // Creates tool tips
 static void HelpMarker(const char* desc)
@@ -48,11 +57,6 @@ static void FullScreenNextWindow()
 // Main Menu
 void WordHunt::WordHuntMenu(bool* p_open)
 {
-    static bool show_game_selector = false;
-    static bool show_solver = false;
-    static bool show_settings = false;
-    static bool show_imgui_demo = false;
-
     if (show_game_selector) ShowGameSelector(&show_game_selector);
     if (show_solver)        ShowSolver(&show_solver);
     if (show_settings)      ShowSettings(&show_settings);
@@ -72,12 +76,11 @@ void WordHunt::WordHuntMenu(bool* p_open)
     {
         // Early escape as optimization
         ImGui::End();
+        ImGui::PopStyleColor();
         return;
     }
     
-    WHGui::PushTitleStyle();
-    CENTERED_CONTROL(ImGui::Text("WORDHUNT"));
-    WHGui::PopTitleStyle();
+    CENTERED_CONTROL(WHGui::Title("WORDHUNT"));
 
     if (CENTERED_CONTROL(WHGui::Button("Play!")))
     {
@@ -109,10 +112,6 @@ void WordHunt::WordHuntMenu(bool* p_open)
 
 void ShowGameSelector(bool* p_open)
 {
-    static bool show_game_screen = false;
-    static bool show_game_creator = false;
-    static bool show_seed_selector = false;
-
     if (show_game_screen)   ShowGameScreen(&show_game_screen);
     if (show_game_creator)  ShowGameCreator(&show_game_creator);
     if (show_seed_selector) ShowSeedSelector(&show_seed_selector);
@@ -122,26 +121,33 @@ void ShowGameSelector(bool* p_open)
     if (!ImGui::Begin("Game Selector", p_open, WHGui::GetWHStyle()->WindowFlags_Default))
     {
         ImGui::End();
+        WHGui::PopWindowStyle();
         return;
     }
 
-    WHGui::PushTitleStyle();
-    CENTERED_CONTROL(ImGui::Text("WORDHUNT"));
-    WHGui::PopTitleStyle();
+    if (WHGui::BackButton())
+    {
+        ImGui::End();
+        WHGui::PopWindowStyle();
+        show_game_selector = false;
+        return;
+    }
+
+    CENTERED_CONTROL(WHGui::Title("WORDHUNT"));
 
     if (CENTERED_CONTROL(WHGui::Button("Quick Play")))
     {
         show_game_creator = true;
-        p_open = false;
+        show_game_selector = false;
     }
     if (CENTERED_CONTROL(WHGui::Button("Custom")))
     {
         show_game_creator = true;
-        p_open = false;
+        show_game_selector = false;
     }
     if (CENTERED_CONTROL(WHGui::Button("Set Seed")))
     {
-        p_open = false;
+        show_game_selector = false;
     }
 
     ImGui::End();

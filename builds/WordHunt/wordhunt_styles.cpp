@@ -19,16 +19,25 @@ WHStyle* config;
 
 WHStyle::WHStyle()
 {
+    //----------------------
+    // [GENERAL]
+    //----------------------
+
     // Theme
     ThemeCol_Main = IM_COL32(124, 171, 126, 255);
     ThemeCol_Secondary = IM_COL32(236, 205, 155, 255);
     ThemeCol_Tertiary = IM_COL32(141, 233, 133, 255);
+    ThemeFontFamily = NotoSerifSemiBold;
 
     // Window
     WindowBackgroundCol = IM_COL32(127, 150, 118, 255);
     ThemeFontFamily = NotoSerifSemiBold;
     WindowFlags_Default = ImGuiWindowFlags_NoDocking | ImGuiWindowFlags_NoCollapse | ImGuiWindowFlags_NoDecoration | ImGuiWindowFlags_NoResize | ImGuiTableFlags_NoSavedSettings;
 
+    //----------------------
+    // [OBJECTS]
+    //----------------------
+    
     // Title
     TitleTextSize = FontSize_64px;
     TitleFontFamily = OpenSansBold;
@@ -36,6 +45,7 @@ WHStyle::WHStyle()
 
     // Text Graphics
     TextSize = FontSize_20px;
+    TextFontFamily = ThemeFontFamily;
     TextCol = IM_COL32(0, 0, 0, 255);
 
     // Button
@@ -48,7 +58,19 @@ WHStyle::WHStyle()
     ButtonTextCol = IM_COL32(0, 0, 0, 255);
     ButtonBorderCol = IM_COL32(95, 158, 160, 255);
 
+    // BackButton
+    BackButtonSize = ImVec2(40,40);
+    BackButtonTextSize = FontSize_30px;
+    BackButtonPadding = ImVec2(10, 10);
+
     // Clock Graphics
+    ClockSize = ImVec2(150.0f, 150.0f);
+    ClockRadius_Outer = ClockSize.x / 2.0;
+    ClockRimWidth = 5.0f;
+    ClockRadius_Inner = ClockRadius_Outer - ClockRimWidth;
+    ClockTickLength = ClockRimWidth * 1.5f;
+    ClockTickQuantity = 12;
+    ClockTickAngleStep = 2.0 * IM_PI / ClockTickAngleStep;
     ClockCol_Rim = IM_COL32(0, 0, 0, 255);
     ClockCol_Body = IM_COL32(255, 255, 255, 255);
     ClockCol_Tick = IM_COL32(0, 0, 0, 255);
@@ -361,6 +383,28 @@ void WHGui::PopButtonStyle()
     ImGui::PopStyleColor(5);
 }
 
+void WHGui::PushBackButtonStyle()
+{
+    ImGuiIO io = ImGui::GetIO();
+    WHStyle* styler = WHGui::GetWHStyle();
+
+    ImGui::PushFont(WHGui::FontRetrieve(styler->ThemeFontFamily, styler->BackButtonTextSize));
+
+    ImGui::PushStyleVar(ImGuiStyleVar_FrameRounding, styler->ButtonRounding);
+    ImGui::PushStyleVar(ImGuiStyleVar_FramePadding, styler->BackButtonPadding);
+    
+    ImGui::PushStyleColor(ImGuiCol_Button, styler->ButtonBackgroundCol);
+    ImGui::PushStyleColor(ImGuiCol_ButtonActive, styler->ButtonBackgroundCol_Active);
+    ImGui::PushStyleColor(ImGuiCol_ButtonHovered, styler->ButtonBackgroundCol_Hovered);
+    ImGui::PushStyleColor(ImGuiCol_Text, styler->ButtonTextCol);
+    ImGui::PushStyleColor(ImGuiCol_Border, styler->ButtonBorderCol);
+}
+
+void WHGui::PopBackButtonStyle()
+{
+    WHGui::PopBackButtonStyle();
+}
+
 void WHGui::PushTileStyle()
 {
 
@@ -386,6 +430,35 @@ void WHGui::PopWindowStyle()
 //-------------------------------------------------------------------------
 // [SECTION] CUSTOM OBJECTS
 //-------------------------------------------------------------------------
+
+bool WHGui::Button(const char* label, const ImVec2& size)
+{
+    WHGui::PushButtonStyle();
+    bool ret_val = ImGui::Button(label, size);
+    WHGui::PopButtonStyle();
+    return ret_val;
+}
+
+bool WHGui::Title(const char* label)
+{
+    WHGui::PushTitleStyle();
+    ImGui::Text(label);
+    WHGui::PopTitleStyle();
+    return true;
+}
+
+bool WHGui::BackButton()
+{
+    ImVec2 cursor = ImGui::GetCursorPos();
+    ImVec2 size = WHGui::GetWHStyle()->BackButtonSize;
+    ImGui::SetCursorPos(ImVec2(10,10));
+    WHGui::PushBackButtonStyle();
+    bool clicked = ImGui::Button("<", size);
+    WHGui::PopBackButtonStyle();
+    ImGui::SetCursorPos(cursor);
+    return clicked;
+}
+
 
 // Returns true if solution item hovered
 bool WHGui::SolutionItem(Solution* entry, const ImVec2& size, ImU32 solution_color, ImGuiWindowFlags flags, const std::string prefix)
@@ -427,12 +500,4 @@ bool WHGui::SolutionItem(Solution* entry, const ImVec2& size, ImU32 solution_col
     is_hovered = ImGui::IsWindowHovered(ImGuiHoveredFlags_ChildWindows);
     ImGui::EndChild();
     return is_hovered;
-}
-
-bool WHGui::Button(const char* label, const ImVec2& size)
-{
-    WHGui::PushButtonStyle();
-    bool ret_val = ImGui::Button(label, size);
-    WHGui::PopButtonStyle();
-    return ret_val;
 }
