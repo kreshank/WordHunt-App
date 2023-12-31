@@ -402,7 +402,9 @@ void WHGui::PushBackButtonStyle()
 
 void WHGui::PopBackButtonStyle()
 {
-    WHGui::PopBackButtonStyle();
+    ImGui::PopFont();
+    ImGui::PopStyleVar(2);
+    ImGui::PopStyleColor(5);
 }
 
 void WHGui::PushTileStyle()
